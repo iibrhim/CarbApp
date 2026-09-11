@@ -1,0 +1,11 @@
+[project]
+name = "diabetes_manager"
+version = "1.0.0"
+description = "Smart Diabetes Management System"
+dependencies = [
+    "flet",
+    "google-genai",
+]
+
+[tool.flet.app]
+module = "main"
