@@ -1,7 +1,5 @@
 import flet as ft
-from flet import FilePicker  # استدعاء صريح لإجبار محرك الأندرويد على دمج الأداة
 from google import genai
-from google.genai import types
 import json
 import datetime
 import threading
@@ -9,7 +7,7 @@ import time
 import os
 
 # ========================================================
-# --- محرك التخزين المحلي الأصيل (بديل client_storage) ---
+# --- محرك التخزين المحلي الأصيل ---
 # ========================================================
 STORAGE_FILE = os.path.join(os.environ.get("HOME", os.getcwd()), "carbapp_storage.json")
 
@@ -54,10 +52,11 @@ def main(page: ft.Page):
 
     def toggle_theme(e):
         page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
-        theme_icon.icon = "dark_mode" if page.theme_mode == ft.ThemeMode.LIGHT else "light_mode"
+        theme_icon.content.name = "dark_mode" if page.theme_mode == ft.ThemeMode.LIGHT else "light_mode"
         page.update()
 
-    theme_icon = ft.IconButton(icon="dark_mode", icon_color="white", on_click=toggle_theme)
+    # استخدام التغليف الآمن للأيقونات
+    theme_icon = ft.IconButton(content=ft.Icon(name="dark_mode", color="white"), on_click=toggle_theme)
 
     app_header = ft.Container(
         content=ft.Row([
@@ -126,16 +125,15 @@ def main(page: ft.Page):
         )
 
     # ========================================================
-    # --- 5. قسم الحاسبة الذكية ---
+    # --- 5. قسم الحاسبة الذكية (بدون FilePicker لضمان الاستقرار) ---
     # ========================================================
-    selected_images_paths = []
-    images_row = ft.Row(wrap=True, spacing=10, alignment=ft.MainAxisAlignment.CENTER)
-    
     current_bg_input = custom_textfield("مستوى السكر الحالي", "monitor_heart")
-    description_input = custom_textfield("ملاحظة إضافية للذكاء الاصطناعي (اختياري)", "edit_note", multiline=True)
-    extracted_carbs_input = custom_textfield("صافي الكارب (جم)", "restaurant_menu", helper_text="يمكنك إدخال أو تعديل الرقم يدوياً")
     
-    loading_ring = ft.Container(content=ft.Column([ft.ProgressRing(stroke_width=4), ft.Text("الذكاء الاصطناعي يحلل...", font_family="Cairo Bold")], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), visible=False)
+    # تحويل الإدخال إلى وصف نصي ذكي بدلاً من رفع الصور
+    meal_description_input = custom_textfield("ماذا ستأكل؟ (مثال: شريحة بيتزا وتفاحة)", "restaurant", multiline=True)
+    extracted_carbs_input = custom_textfield("صافي الكارب (جم)", "calculate", helper_text="الرقم المستخرج من الذكاء الاصطناعي")
+    
+    loading_ring = ft.Container(content=ft.Column([ft.ProgressRing(stroke_width=4), ft.Text("الذكاء الاصطناعي يحلل الوجبة...", font_family="Cairo Bold")], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), visible=False)
     
     ai_details_card_content = ft.Column(spacing=10)
     ai_details_card = ft.Container(border_radius=20, padding=20, visible=False, content=ai_details_card_content)
@@ -144,46 +142,19 @@ def main(page: ft.Page):
     result_card = ft.Container(border_radius=20, padding=20, visible=False, content=result_card_content)
     final_dose_state = {"dose": 0.0, "bg": 0.0}
 
-    def update_images_ui():
-        images_row.controls.clear()
-        for path in selected_images_paths: images_row.controls.append(ft.Image(src=path, width=70, height=70, fit="cover", border_radius=10))
-        page.update()
-
-    def on_file_picked(e: ft.FilePickerResultEvent):
-        if e.files:
-            selected_images_paths.clear()
-            for f in e.files: selected_images_paths.append(f.path)
-            update_images_ui()
-
-    # استخدام الأداة المستدعاة صراحة
-    file_picker = FilePicker()
-    file_picker.on_result = on_file_picked
-    page.overlay.append(file_picker)
-
-    upload_zone = ft.Container(
-        content=ft.Column([
-            ft.Icon("cloud_upload_rounded", size=40, color="teal"),
-            ft.Text("اضغط لإضافة صور الوجبة أو الملصق", font_family="Cairo Bold", size=15),
-            ft.Text("يمكنك دمج أكثر من صورة للتحليل", font_family="Cairo", size=11)
-        ], horizontal_alignment="center", spacing=2),
-        padding=20, 
-        border=ft.Border(top=ft.BorderSide(width=2, color="teal"), bottom=ft.BorderSide(width=2, color="teal"), left=ft.BorderSide(width=2, color="teal"), right=ft.BorderSide(width=2, color="teal")), 
-        border_radius=20,
-        ink=True, on_click=lambda _: file_picker.pick_files(allow_multiple=True)
-    )
-
     def analyze_meal(e):
-        if not selected_images_paths:
-            page.snack_bar = ft.SnackBar(ft.Text("الرجاء إرفاق صورة للوجبة أولاً!", font_family="Cairo"), bgcolor="red"); page.snack_bar.open = True; page.update(); return
+        if not meal_description_input.value:
+            page.snack_bar = ft.SnackBar(ft.Text("الرجاء كتابة وصف للوجبة أولاً!", font_family="Cairo"), bgcolor="red")
+            page.snack_bar.open = True
+            page.update()
+            return
         
         loading_ring.visible = True; ai_details_card.visible = False; result_card.visible = False; page.update()
         try:
-            parts = [f"""أنت خبير تغذية سريرية لمرضى السكري. حلل الصور المرفقة. الملاحظة: '{description_input.value}'.
-            الرد **فقط** بتنسيق JSON: {{"net_carbs_grams": 0, "meal_description": "وصف دقيق", "impact_alert": "تأثير الوجبة", "items": [{{"name": "المكون", "weight_g": 0, "carbs_g": 0}}]}}"""]
-            for path in selected_images_paths:
-                with open(path, "rb") as image_file: parts.append(types.Part.from_bytes(data=image_file.read(), mime_type='image/jpeg'))
+            prompt = f"""أنت خبير تغذية سريرية لمرضى السكري. قم بحساب الكارب لهذه الوجبة: '{meal_description_input.value}'.
+            الرد **فقط** بتنسيق JSON: {{"net_carbs_grams": 0, "meal_description": "وصف دقيق", "impact_alert": "تأثير الوجبة", "items": [{{"name": "المكون", "weight_g": 0, "carbs_g": 0}}]}}"""
             
-            response = client.models.generate_content(model='gemini-3.6-flash', contents=parts)
+            response = client.models.generate_content(model='gemini-3.6-flash', contents=prompt)
             raw_text = response.text.strip()
             if raw_text.startswith("```json"): raw_text = raw_text[7:-3]
             elif raw_text.startswith("```"): raw_text = raw_text[3:-3]
@@ -192,7 +163,7 @@ def main(page: ft.Page):
             extracted_carbs_input.value = str(data.get("net_carbs_grams", 0))
             
             ai_details_card_content.controls.clear()
-            ai_details_card_content.controls.append(ft.Row([ft.Icon("auto_awesome", color="teal"), ft.Text("رؤية الذكاء الاصطناعي", font_family="Cairo Bold", size=18)]))
+            ai_details_card_content.controls.append(ft.Row([ft.Icon("auto_awesome", color="teal"), ft.Text("تحليل الذكاء الاصطناعي", font_family="Cairo Bold", size=18)]))
             ai_details_card_content.controls.append(ft.Text(data.get("meal_description", "تم التحليل بنجاح."), font_family="Cairo", size=14))
             
             items_wrap = ft.Row(wrap=True, spacing=8)
@@ -205,7 +176,8 @@ def main(page: ft.Page):
             impact = data.get("impact_alert", "")
             if impact: ai_details_card_content.controls.append(ft.Container(content=ft.Row([ft.Icon("warning_amber_rounded", color="orange"), ft.Text(impact, font_family="Cairo Bold", size=12, expand=True)]), bgcolor="orange100", padding=12, border_radius=10, margin=ft.Margin(left=0, right=0, top=5, bottom=0)))
             ai_details_card.visible = True
-        except Exception as ex: page.snack_bar = ft.SnackBar(ft.Text(f"حدث خطأ", font_family="Cairo"), bgcolor="red"); page.snack_bar.open = True
+        except Exception as ex: 
+            page.snack_bar = ft.SnackBar(ft.Text(f"حدث خطأ في التحليل", font_family="Cairo"), bgcolor="red"); page.snack_bar.open = True
         finally: loading_ring.visible = False; page.update()
 
     def calculate_final_dose(e):
@@ -250,9 +222,8 @@ def main(page: ft.Page):
     calculator_view = ft.Container(
         padding=20,
         content=ft.Column([
-            upload_zone, images_row,
             ft.Divider(height=10, color="transparent"),
-            current_bg_input, description_input,
+            current_bg_input, meal_description_input,
             ft.ElevatedButton("(الخطوة الأولى) تحليل الذكاء الاصطناعي", icon="auto_awesome", on_click=analyze_meal, style=ft.ButtonStyle(bgcolor="teal", color="white", padding=18, shape=ft.RoundedRectangleBorder(radius=15)), width=400),
             loading_ring, ai_details_card,
             ft.Divider(color="grey"),
@@ -402,14 +373,16 @@ def main(page: ft.Page):
                 card = ft.Container(
                     content=ft.Column([
                         ft.Row([ft.Icon(icon, color=color, size=20), ft.Text(type_str, font_family="Cairo Bold", size=12, color=color), ft.Container(expand=True), ft.Icon("access_time", size=14), ft.Text(item['time'].replace(" & ", " | "), font_family="Cairo Bold", size=12)]),
-                        ft.Row([ft.Text(item['title'], font_family="Cairo Bold", size=16), ft.Container(expand=True), ft.IconButton(icon="check_circle", icon_color="teal", icon_size=32, on_click=lambda e, i=item['id']: delete_rem(i))])
+                        # استخدام التغليف الآمن للأيقونة
+                        ft.Row([ft.Text(item['title'], font_family="Cairo Bold", size=16), ft.Container(expand=True), ft.IconButton(content=ft.Icon(name="check_circle", color="teal", size=32), on_click=lambda e, i=item['id']: delete_rem(i))])
                     ], spacing=10),
                     bgcolor="grey100", padding=15, border_radius=15, border=ft.Border(left=ft.BorderSide(width=6, color=color))
                 )
                 reminders_list.controls.append(card)
         page.update()
 
-    reminders_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Text("مركز التنبيهات", size=24, font_family="Cairo Bold"), ft.IconButton(icon="add_alarm", bgcolor="teal", icon_color="white", on_click=lambda e: setattr(add_rem_dialog, 'open', True) or page.update())], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), filters_row, reminders_list], expand=True, scroll="hidden"))
+    # استخدام التغليف الآمن للأيقونة
+    reminders_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Text("مركز التنبيهات", size=24, font_family="Cairo Bold"), ft.IconButton(content=ft.Icon(name="add_alarm", color="white"), bgcolor="teal", on_click=lambda e: setattr(add_rem_dialog, 'open', True) or page.update())], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), filters_row, reminders_list], expand=True, scroll="hidden"))
 
     def alarm_background_loop():
         while True:
@@ -488,7 +461,8 @@ def main(page: ft.Page):
                         leading=ft.Icon("vaccines", color="blue"), 
                         title=ft.Text(f"الجرعة: {round(r['dose'],1)} وحدة", font_family="Cairo Bold"), 
                         subtitle=ft.Text(f"السكر: {r['bg']} | {r['time']}", font_family="Cairo", size=11),
-                        trailing=ft.IconButton(icon="delete_outline", icon_color="red", on_click=lambda e, t=r['time']: delete_history_record(t))
+                        # استخدام التغليف الآمن للأيقونة
+                        trailing=ft.IconButton(content=ft.Icon(name="delete_outline", color="red"), on_click=lambda e, t=r['time']: delete_history_record(t))
                     ),
                     bgcolor="grey100", border_radius=10
                 )
