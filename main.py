@@ -36,7 +36,6 @@ def main(page: ft.Page):
             theme_icon
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
         gradient=ft.LinearGradient(begin=ft.Alignment(-1.0, -1.0), end=ft.Alignment(1.0, 1.0), colors=["#0F766E", "#0284C7"]),
-        # استخدام الفئات الرياضية الرسمية بدلاً من الاختصارات الملغاة
         padding=ft.Padding(left=20, top=50, right=20, bottom=20),
         border_radius=ft.BorderRadius(top_left=0, top_right=0, bottom_left=30, bottom_right=30),
         shadow=ft.BoxShadow(spread_radius=1, blur_radius=10, color="black26", offset=ft.Offset(0, 5))
@@ -74,19 +73,15 @@ def main(page: ft.Page):
             except: pass
         return max(0.0, iob)
 
-    # --- 3. المنبه والتنبيهات الخلفية ---
-    alarm_audio = ft.Audio(src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg", autoplay=False)
-    page.overlay.append(alarm_audio)
-
+    # --- 3. المنبه والتنبيهات الخلفية (بدون عنصر الصوت لتوافق الأندرويد) ---
     def dismiss_alarm(e):
-        alarm_audio.pause()
         alarm_dialog.open = False
         page.update()
 
     alarm_dialog = ft.AlertDialog(
         title=ft.Row([ft.Icon(ft.icons.ALARM, color="red"), ft.Text("حان وقت التنبيه!", font_family="Cairo Bold", color="red")]),
         content=ft.Text("", font_family="Cairo Bold", size=18, text_align="center"),
-        actions=[ft.ElevatedButton("إيقاف الرنين", on_click=dismiss_alarm, bgcolor="red", color="white", icon=ft.icons.STOP_CIRCLE)],
+        actions=[ft.ElevatedButton("حسناً، تم", on_click=dismiss_alarm, bgcolor="red", color="white", icon=ft.icons.CHECK_CIRCLE)],
         shape=ft.RoundedRectangleBorder(radius=20), modal=True
     )
     page.overlay.append(alarm_dialog)
@@ -400,7 +395,7 @@ def main(page: ft.Page):
                         notif_now_key = f"notified_now_{target_time}_{current_date}" if is_daily else f"notified_now_{target_time}"
                         if target_time == cmp_current and item.get("last_now") != notif_now_key:
                             item["last_now"] = notif_now_key; needs_save = True
-                            alarm_dialog.content.value = item['title']; alarm_dialog.open = True; alarm_audio.play(); page.update()
+                            alarm_dialog.content.value = item['title']; alarm_dialog.open = True; page.update()
 
                         if item.get("day_before") and not is_daily:
                             try:
