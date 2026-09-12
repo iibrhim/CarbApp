@@ -35,10 +35,10 @@ def main(page: ft.Page):
             ft.Text("نظام إدارة السكري", size=24, color="white", font_family="Cairo Bold", text_align=ft.TextAlign.CENTER, expand=True),
             theme_icon
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        # استخدام الإحداثيات الرياضية الدقيقة لتجنب أخطاء الأندرويد
         gradient=ft.LinearGradient(begin=ft.Alignment(-1.0, -1.0), end=ft.Alignment(1.0, 1.0), colors=["#0F766E", "#0284C7"]),
-        padding=ft.padding.only(top=50, bottom=20, left=20, right=20),
-        border_radius=ft.border_radius.only(bottom_left=30, bottom_right=30),
+        # استخدام الفئات الرياضية الرسمية بدلاً من الاختصارات الملغاة
+        padding=ft.Padding(left=20, top=50, right=20, bottom=20),
+        border_radius=ft.BorderRadius(top_left=0, top_right=0, bottom_left=30, bottom_right=30),
         shadow=ft.BoxShadow(spread_radius=1, blur_radius=10, color="black26", offset=ft.Offset(0, 5))
     )
 
@@ -140,7 +140,9 @@ def main(page: ft.Page):
             ft.Text("اضغط لإضافة صور الوجبة أو الملصق", font_family="Cairo Bold", size=15),
             ft.Text("يمكنك دمج أكثر من صورة للتحليل", font_family="Cairo", size=11)
         ], horizontal_alignment="center", spacing=2),
-        padding=20, border=ft.border.all(2, "teal"), border_radius=20,
+        padding=20, 
+        border=ft.Border(top=ft.BorderSide(width=2, color="teal"), bottom=ft.BorderSide(width=2, color="teal"), left=ft.BorderSide(width=2, color="teal"), right=ft.BorderSide(width=2, color="teal")), 
+        border_radius=20,
         ink=True, on_click=lambda _: file_picker.pick_files(allow_multiple=True)
     )
 
@@ -170,12 +172,12 @@ def main(page: ft.Page):
             items_wrap = ft.Row(wrap=True, spacing=8)
             for item in data.get("items", []):
                 items_wrap.controls.append(
-                    ft.Container(content=ft.Row([ft.Icon(ft.icons.RESTAURANT, size=12), ft.Text(f"{item['name']} ({item['weight_g']}ج)", font_family="Cairo Bold", size=12)], spacing=4), bgcolor="bluegrey200", padding=ft.padding.symmetric(horizontal=10, vertical=6), border_radius=15)
+                    ft.Container(content=ft.Row([ft.Icon(ft.icons.RESTAURANT, size=12), ft.Text(f"{item['name']} ({item['weight_g']}ج)", font_family="Cairo Bold", size=12)], spacing=4), bgcolor="bluegrey200", padding=ft.Padding(left=10, right=10, top=6, bottom=6), border_radius=15)
                 )
             ai_details_card_content.controls.append(items_wrap)
             
             impact = data.get("impact_alert", "")
-            if impact: ai_details_card_content.controls.append(ft.Container(content=ft.Row([ft.Icon(ft.icons.WARNING_AMBER_ROUNDED, color="orange"), ft.Text(impact, font_family="Cairo Bold", size=12, expand=True)]), bgcolor="orange100", padding=12, border_radius=10, margin=ft.margin.only(top=5)))
+            if impact: ai_details_card_content.controls.append(ft.Container(content=ft.Row([ft.Icon(ft.icons.WARNING_AMBER_ROUNDED, color="orange"), ft.Text(impact, font_family="Cairo Bold", size=12, expand=True)]), bgcolor="orange100", padding=12, border_radius=10, margin=ft.Margin(left=0, right=0, top=5, bottom=0)))
             ai_details_card.visible = True
         except Exception as ex: page.snack_bar = ft.SnackBar(ft.Text(f"حدث خطأ", font_family="Cairo"), bgcolor="red"); page.snack_bar.open = True
         finally: loading_ring.visible = False; page.update()
@@ -245,7 +247,7 @@ def main(page: ft.Page):
         filters_row.controls.clear()
         curr = page.session.get("rem_filter")
         def create_chip(label, f_type, is_active):
-            return ft.Container(content=ft.Text(label, font_family="Cairo Bold", color="white" if is_active else "black", size=13), bgcolor="teal" if is_active else "grey200", padding=ft.padding.symmetric(horizontal=16, vertical=8), border_radius=20, on_click=lambda e, ft_type=f_type: apply_filter(ft_type))
+            return ft.Container(content=ft.Text(label, font_family="Cairo Bold", color="white" if is_active else "black", size=13), bgcolor="teal" if is_active else "grey200", padding=ft.Padding(left=16, right=16, top=8, bottom=8), border_radius=20, on_click=lambda e, ft_type=f_type: apply_filter(ft_type))
         filters_row.controls.extend([create_chip("الكل 📋", "all", curr == "all"), create_chip("أدوية 💊", "med", curr == "med"), create_chip("مواعيد 📅", "appt", curr == "appt"), create_chip("صرف 🔄", "refill", curr == "refill")])
         page.update()
 
@@ -366,7 +368,7 @@ def main(page: ft.Page):
                         ft.Row([ft.Icon(icon, color=color, size=20), ft.Text(type_str, font_family="Cairo Bold", size=12, color=color), ft.Container(expand=True), ft.Icon(ft.icons.ACCESS_TIME, size=14), ft.Text(item['time'].replace(" & ", " | "), font_family="Cairo Bold", size=12)]),
                         ft.Row([ft.Text(item['title'], font_family="Cairo Bold", size=16), ft.Container(expand=True), ft.IconButton(ft.icons.CHECK_CIRCLE, icon_color="teal", icon_size=32, on_click=lambda e, i=item['id']: delete_rem(i))])
                     ], spacing=10),
-                    bgcolor="grey100", padding=15, border_radius=15, border=ft.border.only(left=ft.BorderSide(6, color))
+                    bgcolor="grey100", padding=15, border_radius=15, border=ft.Border(left=ft.BorderSide(width=6, color=color))
                 )
                 reminders_list.controls.append(card)
         page.update()
