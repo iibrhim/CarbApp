@@ -1,5 +1,4 @@
 import flet as ft
-from flet import FilePicker
 from google import genai
 from google.genai import types
 import json
@@ -41,7 +40,7 @@ client = genai.Client(api_key="AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2
 def main(page: ft.Page):
     # --- 1. إعدادات الصفحة والنمط التكيفي ---
     page.title = "نظام إدارة السكري"
-    page.rtl = True  # تفعيل الاتجاه العربي الأصيل لحل مشكلة تقطيع الحروف
+    page.rtl = True  # تفعيل الاتجاه العربي
     page.theme = ft.Theme(color_scheme_seed="teal", use_material3=True)
     page.theme_mode = ft.ThemeMode.LIGHT
     page.window_width = 420 
@@ -54,7 +53,6 @@ def main(page: ft.Page):
         theme_icon.icon = ft.Icons.DARK_MODE if page.theme_mode == ft.ThemeMode.LIGHT else ft.Icons.LIGHT_MODE
         page.update()
 
-    # استخدام فئة ft.Icons الرسمية لتجنب أخطاء الأندرويد
     theme_icon = ft.IconButton(icon=ft.Icons.DARK_MODE, icon_color="white", on_click=toggle_theme)
 
     app_header = ft.Container(
@@ -124,13 +122,16 @@ def main(page: ft.Page):
         )
 
     # ========================================================
-    # --- 5. قسم الحاسبة الذكية ---
+    # --- 5. قسم الحاسبة الذكية (مع الصور الذكية) ---
     # ========================================================
+    selected_images_paths = []
+    images_row = ft.Row(wrap=True, spacing=10, alignment=ft.MainAxisAlignment.CENTER)
+    
     current_bg_input = custom_textfield("مستوى السكر الحالي", ft.Icons.MONITOR_HEART)
-    meal_description_input = custom_textfield("ماذا ستأكل؟ (مثال: شريحة بيتزا وتفاحة)", ft.Icons.RESTAURANT, multiline=True)
+    meal_description_input = custom_textfield("ملاحظة إضافية للذكاء الاصطناعي (اختياري)", ft.Icons.EDIT_NOTE, multiline=True)
     extracted_carbs_input = custom_textfield("صافي الكارب (جم)", ft.Icons.CALCULATE, helper_text="الرقم المستخرج من الذكاء الاصطناعي")
     
-    loading_ring = ft.Container(content=ft.Column([ft.ProgressRing(stroke_width=4), ft.Text("الذكاء الاصطناعي يحلل الوجبة...", weight=ft.FontWeight.BOLD)], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), visible=False)
+    loading_ring = ft.Container(content=ft.Column([ft.ProgressRing(stroke_width=4), ft.Text("الذكاء الاصطناعي يحلل...", weight=ft.FontWeight.BOLD)], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), visible=False)
     
     ai_details_card_content = ft.Column(spacing=10)
     ai_details_card = ft.Container(border_radius=20, padding=20, visible=False, content=ai_details_card_content)
@@ -139,19 +140,51 @@ def main(page: ft.Page):
     result_card = ft.Container(border_radius=20, padding=20, visible=False, content=result_card_content)
     final_dose_state = {"dose": 0.0, "bg": 0.0}
 
+    def update_images_ui():
+        images_row.controls.clear()
+        for path in selected_images_paths: 
+            images_row.controls.append(ft.Image(src=path, width=70, height=70, fit=ft.ImageFit.COVER, border_radius=10))
+        page.update()
+
+    def on_file_picked(e: ft.FilePickerResultEvent):
+        if e.files:
+            selected_images_paths.clear()
+            for f in e.files: selected_images_paths.append(f.path)
+            update_images_ui()
+
+    # استخدام ft.FilePicker صراحةً حتى يتمكن الأندرويد من تضمينها
+    file_picker = ft.FilePicker()
+    file_picker.on_result = on_file_picked
+    page.overlay.append(file_picker)
+
+    upload_zone = ft.Container(
+        content=ft.Column([
+            ft.Icon(ft.Icons.CLOUD_UPLOAD, size=40, color="teal"),
+            ft.Text("اضغط لإضافة صور الوجبة أو الملصق", weight=ft.FontWeight.BOLD, size=15),
+            ft.Text("يمكنك دمج أكثر من صورة للتحليل", size=11)
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
+        padding=ft.Padding(left=20, right=20, top=20, bottom=20),
+        border=ft.Border(top=ft.BorderSide(width=2, color="teal"), bottom=ft.BorderSide(width=2, color="teal"), left=ft.BorderSide(width=2, color="teal"), right=ft.BorderSide(width=2, color="teal")),
+        border_radius=20,
+        ink=True, on_click=lambda _: file_picker.pick_files(allow_multiple=True)
+    )
+
     def analyze_meal(e):
-        if not meal_description_input.value:
-            page.snack_bar = ft.SnackBar(ft.Text("الرجاء كتابة وصف للوجبة أولاً!"), bgcolor="red")
-            page.snack_bar.open = True
-            page.update()
-            return
+        if not selected_images_paths and not meal_description_input.value:
+            page.snack_bar = ft.SnackBar(ft.Text("الرجاء إرفاق صورة للوجبة أو كتابة وصفها!"), bgcolor="red")
+            page.snack_bar.open = True; page.update(); return
         
         loading_ring.visible = True; ai_details_card.visible = False; result_card.visible = False; page.update()
         try:
-            prompt = f"""أنت خبير تغذية سريرية لمرضى السكري. قم بحساب الكارب لهذه الوجبة: '{meal_description_input.value}'.
+            prompt_text = f"""أنت خبير تغذية سريرية لمرضى السكري. قم بحساب الكارب بدقة.
+            ملاحظة إضافية من المستخدم: '{meal_description_input.value}'.
             الرد **فقط** بتنسيق JSON: {{"net_carbs_grams": 0, "meal_description": "وصف دقيق", "impact_alert": "تأثير الوجبة", "items": [{{"name": "المكون", "weight_g": 0, "carbs_g": 0}}]}}"""
             
-            response = client.models.generate_content(model='gemini-3.6-flash', contents=prompt)
+            parts = [prompt_text]
+            for path in selected_images_paths:
+                with open(path, "rb") as image_file: parts.append(types.Part.from_bytes(data=image_file.read(), mime_type='image/jpeg'))
+            
+            response = client.models.generate_content(model='gemini-3.6-flash', contents=parts)
             raw_text = response.text.strip()
             if raw_text.startswith("```json"): raw_text = raw_text[7:-3]
             elif raw_text.startswith("```"): raw_text = raw_text[3:-3]
@@ -174,7 +207,7 @@ def main(page: ft.Page):
             if impact: ai_details_card_content.controls.append(ft.Container(content=ft.Row([ft.Icon(ft.Icons.WARNING_AMBER, color="orange"), ft.Text(impact, weight=ft.FontWeight.BOLD, size=12, expand=True)]), bgcolor="orange100", padding=12, border_radius=10, margin=ft.Margin(left=0, right=0, top=5, bottom=0)))
             ai_details_card.visible = True
         except Exception as ex: 
-            page.snack_bar = ft.SnackBar(ft.Text(f"حدث خطأ في التحليل"), bgcolor="red"); page.snack_bar.open = True
+            page.snack_bar = ft.SnackBar(ft.Text(f"حدث خطأ أثناء تحليل الصور"), bgcolor="red"); page.snack_bar.open = True
         finally: loading_ring.visible = False; page.update()
 
     def calculate_final_dose(e):
@@ -220,7 +253,10 @@ def main(page: ft.Page):
         padding=20,
         content=ft.Column([
             ft.Divider(height=10, color="transparent"),
-            current_bg_input, meal_description_input,
+            current_bg_input,
+            upload_zone, # تمت إضافة منطقة التحميل بنجاح
+            images_row,  # تمت إضافة عارض الصور بنجاح
+            meal_description_input,
             ft.ElevatedButton("(الخطوة الأولى) تحليل الذكاء الاصطناعي", icon=ft.Icons.AUTO_AWESOME, on_click=analyze_meal, style=ft.ButtonStyle(bgcolor="teal", color="white", padding=18, shape=ft.RoundedRectangleBorder(radius=15)), width=400),
             loading_ring, ai_details_card,
             ft.Divider(color="grey"),
