@@ -5,6 +5,35 @@ import json
 import datetime
 import threading
 import time
+import os
+
+# ========================================================
+# --- محرك التخزين المحلي الأصيل (بديل client_storage) ---
+# ========================================================
+STORAGE_FILE = os.path.join(os.environ.get("HOME", os.getcwd()), "carbapp_storage.json")
+
+def get_storage(key, default=None):
+    try:
+        if os.path.exists(STORAGE_FILE):
+            with open(STORAGE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get(key, default)
+    except: pass
+    return default
+
+def set_storage(key, value):
+    data = {}
+    try:
+        if os.path.exists(STORAGE_FILE):
+            with open(STORAGE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+    except: pass
+    data[key] = value
+    try:
+        with open(STORAGE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except: pass
+
 
 client = genai.Client(api_key="AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg")
 
@@ -43,11 +72,10 @@ def main(page: ft.Page):
 
     # --- 2. إدارة السجل والأنسولين النشط ---
     def load_history():
-        h = page.client_storage.get("user_history")
-        return json.loads(h) if h else []
+        return get_storage("user_history", [])
 
     def save_history(data):
-        page.client_storage.set("user_history", json.dumps(data))
+        set_storage("user_history", data)
 
     def log_dose(dose, bg):
         if dose <= 0: return
@@ -181,10 +209,10 @@ def main(page: ft.Page):
     def calculate_final_dose(e):
         try:
             carbs = float(extracted_carbs_input.value) if extracted_carbs_input.value else 0.0
-            bg = float(current_bg_input.value) if current_bg_input.value else float(page.client_storage.get("target_bg") or 100.0)
-            icr = float(page.client_storage.get("icr") or 10.0)
-            isf = float(page.client_storage.get("isf") or 50.0)
-            target = float(page.client_storage.get("target_bg") or 100.0)
+            bg = float(current_bg_input.value) if current_bg_input.value else float(get_storage("target_bg", 100.0))
+            icr = float(get_storage("icr", 10.0))
+            isf = float(get_storage("isf", 50.0))
+            target = float(get_storage("target_bg", 100.0))
             
             iob = calculate_iob()
             meal_dose = carbs / icr
@@ -235,7 +263,6 @@ def main(page: ft.Page):
     # ========================================================
     # --- 6. قسم مركز التنبيهات ---
     # ========================================================
-    # استبدال page.session بمتغير بايثون قياسي 100%
     filter_state = {"current": "all"}
     
     reminders_list = ft.Column(spacing=15, scroll="hidden", expand=True)
@@ -326,9 +353,14 @@ def main(page: ft.Page):
     time_picker_2 = ft.TimePicker(on_change=on_time2_picked)
     page.overlay.extend([date_picker_1, time_picker_1, time_picker_2])
 
-    def load_rems(): r = page.client_storage.get("user_rems"); return json.loads(r) if r else []
-    def save_rems(data): page.client_storage.set("user_rems", json.dumps(data))
-    def delete_rem(rem_id): save_rems([d for d in load_rems() if d['id'] != rem_id]); page.snack_bar = ft.SnackBar(ft.Text("تم الإنجاز!", font_family="Cairo Bold"), bgcolor="green"); page.snack_bar.open = True; refresh_rems()
+    def load_rems(): return get_storage("user_rems", [])
+    def save_rems(data): set_storage("user_rems", data)
+    
+    def delete_rem(rem_id): 
+        save_rems([d for d in load_rems() if d['id'] != rem_id])
+        page.snack_bar = ft.SnackBar(ft.Text("تم الإنجاز!", font_family="Cairo Bold"), bgcolor="green")
+        page.snack_bar.open = True
+        refresh_rems()
     
     def add_rem_click(e):
         if not rem_title.value or not rem_time_field_1.value: 
@@ -464,14 +496,19 @@ def main(page: ft.Page):
     dashboard_view = ft.Container(padding=20, content=ft.Column([ft.Text("المؤشرات والتقارير", size=24, font_family="Cairo Bold"), dash_content], expand=True))
 
     # --- 8. قسم الإعدادات ---
-    def get_setting(key, default): val = page.client_storage.get(key); return float(val) if val is not None else default
+    def get_setting(key, default): 
+        val = get_storage(key)
+        return float(val) if val is not None else default
+
     icr_input = custom_textfield("معامل الكارب (ICR)", "restaurant", str(get_setting("icr", 10.0)), helper_text="جرامات الكارب لكل وحدة")
     isf_input = custom_textfield("معامل الحساسية (ISF)", "healing", str(get_setting("isf", 50.0)), helper_text="انخفاض السكر لكل وحدة")
     target_bg_input = custom_textfield("السكر المستهدف", "track_changes", str(get_setting("target_bg", 100.0)), helper_text="السكر المثالي")
     
     def save_settings(e):
         try:
-            page.client_storage.set("icr", float(icr_input.value)); page.client_storage.set("isf", float(isf_input.value)); page.client_storage.set("target_bg", float(target_bg_input.value))
+            set_storage("icr", float(icr_input.value))
+            set_storage("isf", float(isf_input.value))
+            set_storage("target_bg", float(target_bg_input.value))
             page.snack_bar = ft.SnackBar(ft.Text("تم الحفظ بنجاح", font_family="Cairo"), bgcolor="green"); page.snack_bar.open = True; page.update()
         except: pass
 
