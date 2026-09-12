@@ -88,7 +88,6 @@ def main(page: ft.Page):
 
     # --- 4. حقول الإدخال الذكية ---
     def custom_textfield(label, icon, value="", multiline=False, helper_text=None, disabled=False):
-        # تم استبدال helper_text بـ hint_text لتفادي مشاكل الدعم في الأندرويد
         return ft.TextField(
             label=label, value=value, prefix_icon=icon, border_radius=15, filled=True,
             border_color="transparent", multiline=multiline,
@@ -127,7 +126,9 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    file_picker = ft.FilePicker(on_result=on_file_picked)
+    # إنشاء المكون بشكل منفصل وتعيين الخاصية لتجنب خطأ unexpected keyword argument
+    file_picker = ft.FilePicker()
+    file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
 
     upload_zone = ft.Container(
