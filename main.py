@@ -24,10 +24,11 @@ def main(page: ft.Page):
 
     def toggle_theme(e):
         page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
-        theme_icon.icon = ft.icons.DARK_MODE if page.theme_mode == ft.ThemeMode.LIGHT else ft.icons.LIGHT_MODE
+        theme_icon.icon = "dark_mode" if page.theme_mode == ft.ThemeMode.LIGHT else "light_mode"
         page.update()
 
-    theme_icon = ft.IconButton(icon=ft.icons.DARK_MODE, icon_color="white", on_click=toggle_theme)
+    # استخدام نصوص مباشرة للأيقونات لتجنب مشاكل التوافق على الجوال
+    theme_icon = ft.IconButton(icon="dark_mode", icon_color="white", on_click=toggle_theme)
 
     app_header = ft.Container(
         content=ft.Row([
