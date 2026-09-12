@@ -98,15 +98,19 @@ def main(page: ft.Page):
             except: pass
         return max(0.0, iob)
 
-    # --- 3. المنبه والتنبيهات الخلفية ---
+    # --- 3. المنبه والتنبيهات الخلفية (استعادة الصوت) ---
+    alarm_audio = ft.Audio(src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg", autoplay=False)
+    page.overlay.append(alarm_audio)
+
     def dismiss_alarm(e):
+        alarm_audio.pause()
         alarm_dialog.open = False
         page.update()
 
     alarm_dialog = ft.AlertDialog(
         title=ft.Row([ft.Icon(ft.Icons.ALARM, color="red"), ft.Text("حان وقت التنبيه!", weight=ft.FontWeight.BOLD, color="red")]),
         content=ft.Text("", size=18, text_align="center", weight=ft.FontWeight.BOLD),
-        actions=[ft.ElevatedButton("حسناً، تم", on_click=dismiss_alarm, bgcolor="red", color="white", icon=ft.Icons.CHECK_CIRCLE)],
+        actions=[ft.ElevatedButton("إيقاف الرنين", on_click=dismiss_alarm, bgcolor="red", color="white", icon=ft.Icons.STOP_CIRCLE)],
         shape=ft.RoundedRectangleBorder(radius=20), modal=True
     )
     page.overlay.append(alarm_dialog)
@@ -122,13 +126,13 @@ def main(page: ft.Page):
         )
 
     # ========================================================
-    # --- 5. قسم الحاسبة الذكية والصور ---
+    # --- 5. قسم الحاسبة الذكية (استعادة معرض الصور بالكامل) ---
     # ========================================================
     selected_images_paths = []
     images_row = ft.Row(wrap=True, spacing=10, alignment=ft.MainAxisAlignment.CENTER)
     
     current_bg_input = custom_textfield("مستوى السكر الحالي", ft.Icons.MONITOR_HEART)
-    meal_description_input = custom_textfield("ملاحظة إضافية للذكاء الاصطناعي (اختياري)", ft.Icons.EDIT_NOTE, multiline=True)
+    description_input = custom_textfield("ملاحظة إضافية للذكاء الاصطناعي (اختياري)", ft.Icons.EDIT_NOTE, multiline=True)
     extracted_carbs_input = custom_textfield("صافي الكارب (جم)", ft.Icons.CALCULATE, helper_text="الرقم المستخرج من الذكاء الاصطناعي")
     
     loading_ring = ft.Container(content=ft.Column([ft.ProgressRing(stroke_width=4), ft.Text("الذكاء الاصطناعي يحلل...", weight=ft.FontWeight.BOLD)], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), visible=False)
@@ -146,13 +150,13 @@ def main(page: ft.Page):
             images_row.controls.append(ft.Image(src=path, width=70, height=70, fit=ft.ImageFit.COVER, border_radius=10))
         page.update()
 
-    def on_file_picked(e):
+    def on_file_picked(e: ft.FilePickerResultEvent):
         if e.files:
             selected_images_paths.clear()
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    # كتابة ft.FilePicker بالصيغة الرسمية ليقوم مترجم الأندرويد بدمج معرض الصور
+    # كتابة ft.FilePicker بالصيغة الرسمية ليقوم مترجم الأندرويد بدمج معرض الصور تلقائياً
     file_picker = ft.FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
@@ -170,14 +174,13 @@ def main(page: ft.Page):
     )
 
     def analyze_meal(e):
-        if not selected_images_paths and not meal_description_input.value:
+        if not selected_images_paths and not description_input.value:
             page.snack_bar = ft.SnackBar(ft.Text("الرجاء إرفاق صورة للوجبة أو كتابة وصفها!"), bgcolor="red")
             page.snack_bar.open = True; page.update(); return
         
         loading_ring.visible = True; ai_details_card.visible = False; result_card.visible = False; page.update()
         try:
-            prompt_text = f"""أنت خبير تغذية سريرية لمرضى السكري. قم بحساب الكارب بدقة.
-            ملاحظة إضافية من المستخدم: '{meal_description_input.value}'.
+            prompt_text = f"""أنت خبير تغذية سريرية لمرضى السكري. حلل الصور المرفقة إن وجدت، أو الوصف التالي: '{description_input.value}'.
             الرد **فقط** بتنسيق JSON: {{"net_carbs_grams": 0, "meal_description": "وصف دقيق", "impact_alert": "تأثير الوجبة", "items": [{{"name": "المكون", "weight_g": 0, "carbs_g": 0}}]}}"""
             
             parts = [prompt_text]
@@ -256,7 +259,7 @@ def main(page: ft.Page):
             current_bg_input, 
             upload_zone, 
             images_row,
-            meal_description_input,
+            description_input,
             ft.ElevatedButton("(الخطوة الأولى) تحليل الذكاء الاصطناعي", icon=ft.Icons.AUTO_AWESOME, on_click=analyze_meal, style=ft.ButtonStyle(bgcolor="teal", color="white", padding=18, shape=ft.RoundedRectangleBorder(radius=15)), width=400),
             loading_ring, ai_details_card,
             ft.Divider(color="grey"),
@@ -440,7 +443,8 @@ def main(page: ft.Page):
                         notif_now_key = f"notified_now_{target_time}_{current_date}" if is_daily else f"notified_now_{target_time}"
                         if target_time == cmp_current and item.get("last_now") != notif_now_key:
                             item["last_now"] = notif_now_key; needs_save = True
-                            alarm_dialog.content.value = item['title']; alarm_dialog.open = True; page.update()
+                            alarm_dialog.content.value = item['title']; alarm_dialog.open = True
+                            alarm_audio.play(); page.update()
 
                         if item.get("day_before") and not is_daily:
                             try:
