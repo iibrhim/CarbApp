@@ -52,11 +52,11 @@ def main(page: ft.Page):
 
     def toggle_theme(e):
         page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
-        theme_icon.content.name = "dark_mode" if page.theme_mode == ft.ThemeMode.LIGHT else "light_mode"
+        theme_icon.icon = "dark_mode" if page.theme_mode == ft.ThemeMode.LIGHT else "light_mode"
         page.update()
 
-    # استخدام التغليف الآمن للأيقونات
-    theme_icon = ft.IconButton(content=ft.Icon(name="dark_mode", color="white"), on_click=toggle_theme)
+    # استخدام الخصائص المباشرة (icon و icon_color) بدلاً من content لتجنب أخطاء المتغيرات
+    theme_icon = ft.IconButton(icon="dark_mode", icon_color="white", on_click=toggle_theme)
 
     app_header = ft.Container(
         content=ft.Row([
@@ -125,11 +125,9 @@ def main(page: ft.Page):
         )
 
     # ========================================================
-    # --- 5. قسم الحاسبة الذكية (بدون FilePicker لضمان الاستقرار) ---
+    # --- 5. قسم الحاسبة الذكية ---
     # ========================================================
     current_bg_input = custom_textfield("مستوى السكر الحالي", "monitor_heart")
-    
-    # تحويل الإدخال إلى وصف نصي ذكي بدلاً من رفع الصور
     meal_description_input = custom_textfield("ماذا ستأكل؟ (مثال: شريحة بيتزا وتفاحة)", "restaurant", multiline=True)
     extracted_carbs_input = custom_textfield("صافي الكارب (جم)", "calculate", helper_text="الرقم المستخرج من الذكاء الاصطناعي")
     
@@ -373,16 +371,16 @@ def main(page: ft.Page):
                 card = ft.Container(
                     content=ft.Column([
                         ft.Row([ft.Icon(icon, color=color, size=20), ft.Text(type_str, font_family="Cairo Bold", size=12, color=color), ft.Container(expand=True), ft.Icon("access_time", size=14), ft.Text(item['time'].replace(" & ", " | "), font_family="Cairo Bold", size=12)]),
-                        # استخدام التغليف الآمن للأيقونة
-                        ft.Row([ft.Text(item['title'], font_family="Cairo Bold", size=16), ft.Container(expand=True), ft.IconButton(content=ft.Icon(name="check_circle", color="teal", size=32), on_click=lambda e, i=item['id']: delete_rem(i))])
+                        # استخدام الخصائص المباشرة (icon و icon_size و icon_color) بدلاً من تغليفها
+                        ft.Row([ft.Text(item['title'], font_family="Cairo Bold", size=16), ft.Container(expand=True), ft.IconButton(icon="check_circle", icon_color="teal", icon_size=32, on_click=lambda e, i=item['id']: delete_rem(i))])
                     ], spacing=10),
                     bgcolor="grey100", padding=15, border_radius=15, border=ft.Border(left=ft.BorderSide(width=6, color=color))
                 )
                 reminders_list.controls.append(card)
         page.update()
 
-    # استخدام التغليف الآمن للأيقونة
-    reminders_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Text("مركز التنبيهات", size=24, font_family="Cairo Bold"), ft.IconButton(content=ft.Icon(name="add_alarm", color="white"), bgcolor="teal", on_click=lambda e: setattr(add_rem_dialog, 'open', True) or page.update())], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), filters_row, reminders_list], expand=True, scroll="hidden"))
+    # استخدام الخصائص المباشرة (icon و icon_color) بدلاً من تغليفها
+    reminders_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Text("مركز التنبيهات", size=24, font_family="Cairo Bold"), ft.IconButton(icon="add_alarm", bgcolor="teal", icon_color="white", on_click=lambda e: setattr(add_rem_dialog, 'open', True) or page.update())], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), filters_row, reminders_list], expand=True, scroll="hidden"))
 
     def alarm_background_loop():
         while True:
@@ -461,8 +459,8 @@ def main(page: ft.Page):
                         leading=ft.Icon("vaccines", color="blue"), 
                         title=ft.Text(f"الجرعة: {round(r['dose'],1)} وحدة", font_family="Cairo Bold"), 
                         subtitle=ft.Text(f"السكر: {r['bg']} | {r['time']}", font_family="Cairo", size=11),
-                        # استخدام التغليف الآمن للأيقونة
-                        trailing=ft.IconButton(content=ft.Icon(name="delete_outline", color="red"), on_click=lambda e, t=r['time']: delete_history_record(t))
+                        # استخدام الخصائص المباشرة (icon و icon_color) بدلاً من تغليفها
+                        trailing=ft.IconButton(icon="delete_outline", icon_color="red", on_click=lambda e, t=r['time']: delete_history_record(t))
                     ),
                     bgcolor="grey100", border_radius=10
                 )
