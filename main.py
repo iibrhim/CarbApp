@@ -1,0 +1,499 @@
+import flet as ft
+from google import genai
+from google.genai import types
+import json
+import datetime
+import threading
+import time
+
+client = genai.Client(api_key="AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg")
+
+def main(page: ft.Page):
+    # --- 1. إعدادات الصفحة والنمط التكيفي ---
+    page.title = "نظام إدارة السكري"
+    page.fonts = {
+        "Cairo": "https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo-Regular.ttf",
+        "Cairo Bold": "https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo-Bold.ttf"
+    }
+    page.theme = ft.Theme(font_family="Cairo", color_scheme_seed=ft.colors.TEAL, use_material3=True)
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.window_width = 420 
+    page.window_height = 800
+    page.horizontal_alignment = "center"
+    page.padding = 0
+    page.bgcolor = ft.colors.BACKGROUND
+
+    def toggle_theme(e):
+        page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
+        theme_icon.icon = ft.colors.DARK_MODE if page.theme_mode == ft.ThemeMode.LIGHT else ft.colors.LIGHT_MODE
+        page.update()
+
+    theme_icon = ft.IconButton(icon=ft.colors.DARK_MODE, icon_color=ft.colors.WHITE, on_click=toggle_theme)
+
+    app_header = ft.Container(
+        content=ft.Row([
+            ft.Container(width=40), 
+            ft.Text("نظام إدارة السكري", size=24, color=ft.colors.WHITE, font_family="Cairo Bold", text_align=ft.TextAlign.CENTER, expand=True),
+            theme_icon
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+        gradient=ft.LinearGradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right, colors=["#0F766E", "#0284C7"]),
+        padding=ft.padding.only(top=50, bottom=20, left=20, right=20),
+        border_radius=ft.border_radius.only(bottom_left=30, bottom_right=30),
+        shadow=ft.BoxShadow(spread_radius=1, blur_radius=10, color=ft.colors.SHADOW, offset=ft.Offset(0, 5))
+    )
+
+    # --- 2. إدارة السجل والأنسولين النشط ---
+    def load_history():
+        h = page.client_storage.get("user_history")
+        return json.loads(h) if h else []
+
+    def save_history(data):
+        page.client_storage.set("user_history", json.dumps(data))
+
+    def log_dose(dose, bg):
+        if dose <= 0: return
+        history = load_history()
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        history.append({"time": now_str, "dose": dose, "bg": bg})
+        save_history(history)
+        page.snack_bar = ft.SnackBar(ft.Text("تم تسجيل الجرعة بنجاح! 💉", font_family="Cairo Bold"), bgcolor=ft.colors.GREEN)
+        page.snack_bar.open = True
+        page.update()
+
+    def calculate_iob():
+        history = load_history()
+        now = datetime.datetime.now()
+        iob = 0.0
+        active_time_mins = 240 
+        for record in history:
+            try:
+                dt = datetime.datetime.strptime(record["time"], "%Y-%m-%d %H:%M")
+                diff_mins = (now - dt).total_seconds() / 60
+                if 0 <= diff_mins < active_time_mins:
+                    iob += record["dose"] * (1 - (diff_mins / active_time_mins))
+            except: pass
+        return max(0.0, iob)
+
+    # --- 3. المنبه والتنبيهات الخلفية ---
+    alarm_audio = ft.Audio(src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg", autoplay=False)
+    page.overlay.append(alarm_audio)
+
+    def dismiss_alarm(e):
+        alarm_audio.pause()
+        alarm_dialog.open = False
+        page.update()
+
+    alarm_dialog = ft.AlertDialog(
+        title=ft.Row([ft.Icon(ft.colors.ALARM, color=ft.colors.ERROR), ft.Text("حان وقت التنبيه!", font_family="Cairo Bold", color=ft.colors.ERROR)]),
+        content=ft.Text("", font_family="Cairo Bold", size=18, text_align="center"),
+        actions=[ft.ElevatedButton("إيقاف الرنين", on_click=dismiss_alarm, bgcolor=ft.colors.ERROR, color=ft.colors.ON_ERROR, icon=ft.colors.STOP_CIRCLE)],
+        shape=ft.RoundedRectangleBorder(radius=20), modal=True
+    )
+    page.overlay.append(alarm_dialog)
+
+    # --- 4. حقول الإدخال الذكية ---
+    def custom_textfield(label, icon, value="", multiline=False, helper_text=None, disabled=False):
+        return ft.TextField(
+            label=label, value=value, prefix_icon=icon, border_radius=15, filled=True,
+            border_color=ft.colors.TRANSPARENT, multiline=multiline,
+            keyboard_type="text" if multiline else "number", disabled=disabled,
+            text_style=ft.TextStyle(font_family="Cairo Bold", color=ft.colors.ON_SURFACE),
+            helper_text=helper_text, helper_style=ft.TextStyle(font_family="Cairo", size=11) if helper_text else None
+        )
+
+    # ========================================================
+    # --- 5. قسم الحاسبة الذكية ---
+    # ========================================================
+    selected_images_paths = []
+    images_row = ft.Row(wrap=True, spacing=10, alignment=ft.MainAxisAlignment.CENTER)
+    
+    current_bg_input = custom_textfield("مستوى السكر الحالي", ft.colors.MONITOR_HEART)
+    description_input = custom_textfield("ملاحظة إضافية للذكاء الاصطناعي (اختياري)", ft.colors.EDIT_NOTE, multiline=True)
+    extracted_carbs_input = custom_textfield("صافي الكارب (جم)", ft.colors.RESTAURANT_MENU, helper_text="يمكنك إدخال أو تعديل الرقم يدوياً")
+    
+    loading_ring = ft.Container(content=ft.Column([ft.ProgressRing(stroke_width=4), ft.Text("الذكاء الاصطناعي يحلل...", font_family="Cairo Bold")], horizontal_alignment="center"), alignment=ft.alignment.center, visible=False)
+    
+    ai_details_card_content = ft.Column(spacing=10)
+    ai_details_card = ft.Container(bgcolor=ft.colors.SURFACE, border_radius=20, padding=20, visible=False, content=ai_details_card_content)
+
+    result_card_content = ft.Column(spacing=10)
+    result_card = ft.Container(bgcolor=ft.colors.SURFACE, border_radius=20, padding=20, visible=False, content=result_card_content)
+    final_dose_state = {"dose": 0.0, "bg": 0.0}
+
+    def update_images_ui():
+        images_row.controls.clear()
+        for path in selected_images_paths: images_row.controls.append(ft.Image(src=path, width=70, height=70, fit="cover", border_radius=10))
+        page.update()
+
+    def on_file_picked(e: ft.FilePickerResultEvent):
+        if e.files:
+            selected_images_paths.clear()
+            for f in e.files: selected_images_paths.append(f.path)
+            update_images_ui()
+
+    file_picker = ft.FilePicker(on_result=on_file_picked)
+    page.overlay.append(file_picker)
+
+    upload_zone = ft.Container(
+        content=ft.Column([
+            ft.Icon(ft.colors.CLOUD_UPLOAD_ROUNDED, size=40, color=ft.colors.PRIMARY),
+            ft.Text("اضغط لإضافة صور الوجبة أو الملصق", font_family="Cairo Bold", color=ft.colors.PRIMARY, size=15),
+            ft.Text("يمكنك دمج أكثر من صورة للتحليل", font_family="Cairo", color=ft.colors.ON_SURFACE_VARIANT, size=11)
+        ], horizontal_alignment="center", spacing=2),
+        padding=20, border=ft.border.all(2, ft.colors.PRIMARY_CONTAINER), border_radius=20,
+        bgcolor=ft.colors.SURFACE_VARIANT, ink=True, on_click=lambda _: file_picker.pick_files(allow_multiple=True)
+    )
+
+    def analyze_meal(e):
+        if not selected_images_paths:
+            page.snack_bar = ft.SnackBar(ft.Text("الرجاء إرفاق صورة للوجبة أولاً!", font_family="Cairo"), bgcolor=ft.colors.ERROR); page.snack_bar.open = True; page.update(); return
+        
+        loading_ring.visible = True; ai_details_card.visible = False; result_card.visible = False; page.update()
+        try:
+            parts = [f"""أنت خبير تغذية سريرية لمرضى السكري. حلل الصور المرفقة. الملاحظة: '{description_input.value}'.
+            الرد **فقط** بتنسيق JSON: {{"net_carbs_grams": 0, "meal_description": "وصف دقيق", "impact_alert": "تأثير الوجبة", "items": [{{"name": "المكون", "weight_g": 0, "carbs_g": 0}}]}}"""]
+            for path in selected_images_paths:
+                with open(path, "rb") as image_file: parts.append(types.Part.from_bytes(data=image_file.read(), mime_type='image/jpeg'))
+            
+            response = client.models.generate_content(model='gemini-3.6-flash', contents=parts)
+            raw_text = response.text.strip()
+            if raw_text.startswith("```json"): raw_text = raw_text[7:-3]
+            elif raw_text.startswith("```"): raw_text = raw_text[3:-3]
+            data = json.loads(raw_text)
+            
+            extracted_carbs_input.value = str(data.get("net_carbs_grams", 0))
+            
+            ai_details_card_content.controls.clear()
+            ai_details_card_content.controls.append(ft.Row([ft.Icon(ft.colors.AUTO_AWESOME, color=ft.colors.PRIMARY), ft.Text("رؤية الذكاء الاصطناعي", font_family="Cairo Bold", size=18, color=ft.colors.PRIMARY)]))
+            ai_details_card_content.controls.append(ft.Text(data.get("meal_description", "تم التحليل بنجاح."), font_family="Cairo", size=14, color=ft.colors.ON_SURFACE))
+            
+            items_wrap = ft.Row(wrap=True, spacing=8)
+            for item in data.get("items", []):
+                items_wrap.controls.append(
+                    ft.Container(content=ft.Row([ft.Icon(ft.colors.RESTAURANT, size=12, color=ft.colors.ON_SECONDARY_CONTAINER), ft.Text(f"{item['name']} ({item['weight_g']}ج)", font_family="Cairo Bold", size=12, color=ft.colors.ON_SECONDARY_CONTAINER)], spacing=4), bgcolor=ft.colors.SECONDARY_CONTAINER, padding=ft.padding.symmetric(horizontal=10, vertical=6), border_radius=15)
+                )
+            ai_details_card_content.controls.append(items_wrap)
+            
+            impact = data.get("impact_alert", "")
+            if impact: ai_details_card_content.controls.append(ft.Container(content=ft.Row([ft.Icon(ft.colors.WARNING_AMBER_ROUNDED, color=ft.colors.ON_ERROR_CONTAINER), ft.Text(impact, color=ft.colors.ON_ERROR_CONTAINER, font_family="Cairo Bold", size=12, expand=True)]), bgcolor=ft.colors.ERROR_CONTAINER, padding=12, border_radius=10, margin=ft.margin.only(top=5)))
+            ai_details_card.visible = True
+        except Exception as ex: page.snack_bar = ft.SnackBar(ft.Text(f"حدث خطأ", font_family="Cairo"), bgcolor=ft.colors.ERROR); page.snack_bar.open = True
+        finally: loading_ring.visible = False; page.update()
+
+    def calculate_final_dose(e):
+        try:
+            carbs = float(extracted_carbs_input.value) if extracted_carbs_input.value else 0.0
+            bg = float(current_bg_input.value) if current_bg_input.value else float(page.client_storage.get("target_bg") or 100.0)
+            icr = float(page.client_storage.get("icr") or 10.0)
+            isf = float(page.client_storage.get("isf") or 50.0)
+            target = float(page.client_storage.get("target_bg") or 100.0)
+            
+            iob = calculate_iob()
+            meal_dose = carbs / icr
+            correction_dose = (bg - target) / isf
+            total_dose = max(0.0, meal_dose + correction_dose - iob)
+            
+            final_dose_state["dose"] = total_dose; final_dose_state["bg"] = bg
+            result_card_content.controls.clear()
+            
+            result_card_content.controls.append(
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("الجرعة النهائية المقترحة", font_family="Cairo", color=ft.colors.ON_PRIMARY, size=12),
+                        ft.Row([ft.Text(f"{round(total_dose, 1)}", font_family="Cairo Bold", size=36, color=ft.colors.ON_PRIMARY), ft.Text("وحدة", font_family="Cairo", size=18, color=ft.colors.ON_PRIMARY)], alignment=ft.MainAxisAlignment.CENTER)
+                    ], horizontal_alignment="center", spacing=0),
+                    bgcolor=ft.colors.PRIMARY, padding=20, border_radius=15, alignment=ft.alignment.center
+                )
+            )
+            
+            breakdown = ft.Container(
+                content=ft.Column([
+                    ft.Row([ft.Icon(ft.colors.FASTFOOD, size=18, color=ft.colors.ON_SURFACE_VARIANT), ft.Text(f"جرعة الطعام: {round(meal_dose, 1)} وحدة", font_family="Cairo Bold", size=14, color=ft.colors.ON_SURFACE_VARIANT)]),
+                    ft.Row([ft.Icon(ft.colors.HEALING, size=18, color=ft.colors.ON_SURFACE_VARIANT), ft.Text(f"تصحيح السكر: {round(correction_dose, 1)} وحدة", font_family="Cairo Bold", size=14, color=ft.colors.ON_SURFACE_VARIANT)]),
+                    ft.Row([ft.Icon(ft.colors.WATER_DROP, size=18, color=ft.colors.ERROR), ft.Text(f"أنسولين متبقي (يُخصم): -{round(iob, 1)} وحدة", font_family="Cairo Bold", size=14, color=ft.colors.ERROR)]),
+                ], spacing=8), padding=10
+            )
+            result_card_content.controls.append(breakdown)
+            result_card_content.controls.append(ft.ElevatedButton("اعتماد وتسجيل في السجل الطبي", icon=ft.colors.CHECK_CIRCLE, on_click=lambda _: log_dose(final_dose_state["dose"], final_dose_state["bg"]), style=ft.ButtonStyle(bgcolor=ft.colors.GREEN, color=ft.colors.ON_PRIMARY, padding=15), width=400))
+            result_card.visible = True; page.update()
+        except: 
+            page.snack_bar = ft.SnackBar(ft.Text("يرجى التأكد من الأرقام المدخلة!", font_family="Cairo"), bgcolor=ft.colors.ERROR); page.snack_bar.open = True; page.update()
+
+    calculator_view = ft.Container(
+        padding=20,
+        content=ft.Column([
+            upload_zone, images_row,
+            ft.Divider(height=10, color=ft.colors.TRANSPARENT),
+            current_bg_input, description_input,
+            ft.ElevatedButton("(الخطوة الأولى) تحليل الذكاء الاصطناعي", icon=ft.colors.AUTO_AWESOME, on_click=analyze_meal, style=ft.ButtonStyle(bgcolor=ft.colors.PRIMARY, color=ft.colors.ON_PRIMARY, padding=18, shape=ft.RoundedRectangleBorder(radius=15)), width=400),
+            loading_ring, ai_details_card,
+            ft.Divider(color=ft.colors.OUTLINE_VARIANT),
+            extracted_carbs_input,
+            ft.ElevatedButton("(الخطوة الثانية) حساب الجرعة", icon=ft.colors.CALCULATE, on_click=calculate_final_dose, style=ft.ButtonStyle(bgcolor=ft.colors.SECONDARY, color=ft.colors.ON_SECONDARY, padding=18, shape=ft.RoundedRectangleBorder(radius=15)), width=400),
+            result_card
+        ], horizontal_alignment="center", spacing=12, scroll="auto")
+    )
+
+    # ========================================================
+    # --- 6. قسم مركز التنبيهات ---
+    # ========================================================
+    page.session.set("rem_filter", "all")
+    reminders_list = ft.Column(spacing=15, scroll="hidden", expand=True)
+    filters_row = ft.Row(scroll="hidden", spacing=10)
+
+    def update_filters_ui():
+        filters_row.controls.clear()
+        curr = page.session.get("rem_filter")
+        def create_chip(label, f_type, is_active):
+            return ft.Container(content=ft.Text(label, font_family="Cairo Bold", color=ft.colors.ON_PRIMARY if is_active else ft.colors.ON_SURFACE, size=13), bgcolor=ft.colors.PRIMARY if is_active else ft.colors.SURFACE_VARIANT, padding=ft.padding.symmetric(horizontal=16, vertical=8), border_radius=20, on_click=lambda e, ft_type=f_type: apply_filter(ft_type))
+        filters_row.controls.extend([create_chip("الكل 📋", "all", curr == "all"), create_chip("أدوية 💊", "med", curr == "med"), create_chip("مواعيد 📅", "appt", curr == "appt"), create_chip("صرف 🔄", "refill", curr == "refill")])
+        page.update()
+
+    def apply_filter(f_type): page.session.set("rem_filter", f_type); update_filters_ui(); refresh_rems()
+
+    rem_type = ft.Dropdown(label="نوع التنبيه", options=[ft.dropdown.Option("med", "💊 تذكير دواء"), ft.dropdown.Option("appt", "📅 موعد طبي"), ft.dropdown.Option("refill", "🔄 إعادة صرف")], value="med", border_radius=15, filled=True, border_color=ft.colors.TRANSPARENT, text_style=ft.TextStyle(font_family="Cairo Bold", color=ft.colors.ON_SURFACE))
+    med_freq = ft.Dropdown(label="التكرار", options=[ft.dropdown.Option("مرة يومياً", "مرة واحدة يومياً"), ft.dropdown.Option("مرتين يومياً", "مرتين يومياً"), ft.dropdown.Option("عند الحاجة", "عند الحاجة")], value="مرة يومياً", border_radius=15, filled=True, border_color=ft.colors.TRANSPARENT, text_style=ft.TextStyle(font_family="Cairo Bold", color=ft.colors.ON_SURFACE), visible=True)
+    appt_day_before = ft.Checkbox(label="تذكير قبل الموعد بيوم", value=False, label_style=ft.TextStyle(font_family="Cairo Bold"), visible=False)
+
+    rem_title = custom_textfield("عنوان التنبيه", ft.colors.TITLE)
+    
+    rem_time_field_1 = custom_textfield("وقت التنبيه (يومياً)", ft.colors.ACCESS_TIME, disabled=True)
+    rem_time_field_2 = custom_textfield("الوقت الثاني (يومياً)", ft.colors.ACCESS_TIME, disabled=True)
+    rem_time_field_2.visible = False
+
+    selected_dt = {}
+
+    def handle_time1_click(e):
+        if rem_type.value == "med" and med_freq.value in ["مرة يومياً", "مرتين يومياً"]:
+            time_picker_1.pick_time()
+        else:
+            date_picker_1.pick_date()
+
+    rem_time_container_1 = ft.Container(content=rem_time_field_1, on_click=handle_time1_click)
+    rem_time_container_2 = ft.Container(content=rem_time_field_2, on_click=lambda e: time_picker_2.pick_time(), visible=False)
+
+    def on_rem_type_change(e):
+        rem_time_field_1.value = ""
+        rem_time_field_2.value = ""
+        if rem_type.value == "med":
+            med_freq.visible = True
+            appt_day_before.visible = False
+            if med_freq.value == "مرة يومياً":
+                rem_time_field_1.label = "وقت التنبيه (يومياً)"
+                rem_time_field_1.prefix_icon = ft.colors.ACCESS_TIME
+                rem_time_container_2.visible = False; rem_time_field_2.visible = False
+            elif med_freq.value == "مرتين يومياً":
+                rem_time_field_1.label = "الوقت الأول (يومياً)"
+                rem_time_field_1.prefix_icon = ft.colors.ACCESS_TIME
+                rem_time_container_2.visible = True; rem_time_field_2.visible = True
+            else:
+                rem_time_field_1.label = "الوقت والتاريخ"
+                rem_time_field_1.prefix_icon = ft.colors.CALENDAR_MONTH
+                rem_time_container_2.visible = False; rem_time_field_2.visible = False
+        else:
+            med_freq.visible = False
+            appt_day_before.visible = True
+            rem_time_field_1.label = "الوقت والتاريخ"
+            rem_time_field_1.prefix_icon = ft.colors.CALENDAR_MONTH
+            rem_time_container_2.visible = False; rem_time_field_2.visible = False
+        page.update()
+
+    rem_type.on_change = on_rem_type_change
+    med_freq.on_change = on_rem_type_change
+
+    def on_time1_picked(e):
+        if time_picker_1.value:
+            if rem_type.value == "med" and med_freq.value in ["مرة يومياً", "مرتين يومياً"]:
+                rem_time_field_1.value = time_picker_1.value.strftime("%H:%M")
+            else:
+                selected_dt["time"] = time_picker_1.value
+                rem_time_field_1.value = datetime.datetime.combine(selected_dt["date"], selected_dt["time"]).strftime("%Y-%m-%d %H:%M")
+            page.update()
+
+    def on_date1_picked(e):
+        if date_picker_1.value: selected_dt["date"] = date_picker_1.value; time_picker_1.pick_time()
+
+    def on_time2_picked(e):
+        if time_picker_2.value:
+            rem_time_field_2.value = time_picker_2.value.strftime("%H:%M")
+            page.update()
+
+    date_picker_1 = ft.DatePicker(on_change=on_date1_picked)
+    time_picker_1 = ft.TimePicker(on_change=on_time1_picked)
+    time_picker_2 = ft.TimePicker(on_change=on_time2_picked)
+    page.overlay.extend([date_picker_1, time_picker_1, time_picker_2])
+
+    def load_rems(): r = page.client_storage.get("user_rems"); return json.loads(r) if r else []
+    def save_rems(data): page.client_storage.set("user_rems", json.dumps(data))
+    def delete_rem(rem_id): save_rems([d for d in load_rems() if d['id'] != rem_id]); page.snack_bar = ft.SnackBar(ft.Text("تم الإنجاز!", font_family="Cairo Bold"), bgcolor=ft.colors.GREEN); page.snack_bar.open = True; refresh_rems()
+    
+    def add_rem_click(e):
+        if not rem_title.value or not rem_time_field_1.value: 
+            page.snack_bar = ft.SnackBar(ft.Text("أكمل الحقول الأساسية!", font_family="Cairo"), bgcolor=ft.colors.ERROR); page.snack_bar.open = True; page.update(); return
+        if rem_time_field_2.visible and not rem_time_field_2.value:
+            page.snack_bar = ft.SnackBar(ft.Text("أكمل حقل الوقت الثاني!", font_family="Cairo"), bgcolor=ft.colors.ERROR); page.snack_bar.open = True; page.update(); return
+            
+        times = [rem_time_field_1.value]
+        if rem_time_field_2.visible: times.append(rem_time_field_2.value)
+        final_time_str = " & ".join(times)
+
+        data = load_rems()
+        data.append({"id": max([d.get('id', 0) for d in data] + [0]) + 1, "type": rem_type.value, "title": rem_title.value, "time": final_time_str, "freq": med_freq.value if rem_type.value == "med" else None, "day_before": appt_day_before.value if rem_type.value in ["appt", "refill"] else False})
+        save_rems(data); rem_title.value = ""; rem_time_field_1.value = ""; rem_time_field_2.value = ""; add_rem_dialog.open = False; refresh_rems()
+
+    add_rem_dialog = ft.AlertDialog(
+        title=ft.Row([ft.Icon(ft.colors.NOTIFICATIONS_ACTIVE, color=ft.colors.PRIMARY), ft.Text("إضافة تنبيه", font_family="Cairo Bold", color=ft.colors.PRIMARY)]),
+        content=ft.Column([rem_type, med_freq, appt_day_before, rem_title, rem_time_container_1, rem_time_container_2], tight=True, spacing=15),
+        actions=[ft.TextButton("إلغاء", on_click=lambda e: setattr(add_rem_dialog, 'open', False) or page.update()), ft.ElevatedButton("حفظ", icon=ft.colors.SAVE, on_click=add_rem_click, bgcolor=ft.colors.PRIMARY, color=ft.colors.ON_PRIMARY)],
+        shape=ft.RoundedRectangleBorder(radius=20)
+    )
+    page.overlay.append(add_rem_dialog)
+
+    def refresh_rems():
+        reminders_list.controls.clear()
+        all_data = load_rems(); curr = page.session.get("rem_filter")
+        data = all_data if curr == "all" else [d for d in all_data if d['type'] == curr]
+
+        if not data: reminders_list.controls.append(ft.Container(content=ft.Column([ft.Icon(ft.colors.NOTIFICATIONS_NONE, size=70, color=ft.colors.OUTLINE), ft.Text("لا توجد تنبيهات", font_family="Cairo Bold", size=18)], horizontal_alignment="center"), alignment=ft.alignment.center, padding=60))
+        else:
+            for item in data:
+                icon = ft.colors.MEDICATION if item['type'] == 'med' else (ft.colors.CALENDAR_MONTH if item['type'] == 'appt' else ft.colors.REPEAT)
+                color = ft.colors.BLUE if item['type'] == 'med' else (ft.colors.GREEN if item['type'] == 'appt' else ft.colors.ORANGE)
+                type_str = f"{'دواء' if item['type']=='med' else 'موعد' if item['type']=='appt' else 'صرف'}"
+                
+                card = ft.Container(
+                    content=ft.Column([
+                        ft.Row([ft.Icon(icon, color=color, size=20), ft.Text(type_str, font_family="Cairo Bold", size=12, color=color), ft.Container(expand=True), ft.Icon(ft.colors.ACCESS_TIME, size=14), ft.Text(item['time'].replace(" & ", " | "), font_family="Cairo Bold", size=12)]),
+                        ft.Row([ft.Text(item['title'], font_family="Cairo Bold", size=16), ft.Container(expand=True), ft.IconButton(ft.colors.CHECK_CIRCLE, icon_color=ft.colors.PRIMARY, icon_size=32, on_click=lambda e, i=item['id']: delete_rem(i))])
+                    ], spacing=10),
+                    bgcolor=ft.colors.SURFACE_VARIANT, padding=15, border_radius=15, border=ft.border.only(left=ft.BorderSide(6, color))
+                )
+                reminders_list.controls.append(card)
+        page.update()
+
+    reminders_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Text("مركز التنبيهات", size=24, font_family="Cairo Bold"), ft.IconButton(ft.icons.ADD_ALARM, bgcolor=ft.colors.PRIMARY, icon_color=ft.colors.ON_PRIMARY, on_click=lambda e: setattr(add_rem_dialog, 'open', True) or page.update())], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), filters_row, reminders_list], expand=True, scroll="hidden"))
+
+    def alarm_background_loop():
+        while True:
+            try:
+                now = datetime.datetime.now()
+                current_full = now.strftime("%Y-%m-%d %H:%M"); current_time = now.strftime("%H:%M")
+                five_mins_full = (now + datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M"); five_mins_time = (now + datetime.timedelta(minutes=5)).strftime("%H:%M")
+                current_date = now.strftime("%Y-%m-%d")
+                
+                data = load_rems(); needs_save = False
+
+                for item in data:
+                    targets = item.get("time", "").split(" & ")
+                    for target_time in targets:
+                        is_daily = len(target_time) == 5
+                        cmp_current = current_time if is_daily else current_full
+                        cmp_five = five_mins_time if is_daily else five_mins_full
+
+                        notif_5m_key = f"notified_5m_{target_time}_{current_date}" if is_daily else f"notified_5m_{target_time}"
+                        if target_time == cmp_five and item.get("last_5m") != notif_5m_key:
+                            item["last_5m"] = notif_5m_key; needs_save = True
+                            page.snack_bar = ft.SnackBar(ft.Text(f"⏳ اقترب: {item['title']} بعد 5 دقائق!", font_family="Cairo Bold")); page.snack_bar.open = True; page.update()
+
+                        notif_now_key = f"notified_now_{target_time}_{current_date}" if is_daily else f"notified_now_{target_time}"
+                        if target_time == cmp_current and item.get("last_now") != notif_now_key:
+                            item["last_now"] = notif_now_key; needs_save = True
+                            alarm_dialog.content.value = item['title']; alarm_dialog.open = True; alarm_audio.play(); page.update()
+
+                        if item.get("day_before") and not is_daily:
+                            try:
+                                dt_target = datetime.datetime.strptime(target_time, "%Y-%m-%d %H:%M")
+                                day_before_str = (dt_target - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M")
+                                if day_before_str == current_full and item.get("last_day") != target_time:
+                                    item["last_day"] = target_time; needs_save = True
+                                    page.snack_bar = ft.SnackBar(ft.Text(f"📅 تذكير غداً: {item['title']}!", font_family="Cairo Bold")); page.snack_bar.open = True; page.update()
+                            except: pass
+                if needs_save: save_rems(data)
+            except: pass
+            time.sleep(20)
+
+    threading.Thread(target=alarm_background_loop, daemon=True).start()
+
+    # --- 7. قسم المؤشرات الصحية ---
+    dash_content = ft.Column(spacing=15, scroll="auto", expand=True)
+    
+    def delete_history_record(record_time):
+        history = load_history()
+        history = [r for r in history if r["time"] != record_time]
+        save_history(history)
+        page.snack_bar = ft.SnackBar(ft.Text("تم حذف الجرعة من السجل", font_family="Cairo Bold"), bgcolor=ft.colors.ERROR)
+        page.snack_bar.open = True
+        refresh_dashboard()
+
+    def refresh_dashboard():
+        dash_content.controls.clear()
+        history = load_history()
+        if not history:
+            dash_content.controls.append(ft.Container(content=ft.Column([ft.Icon(ft.colors.INSERT_CHART_OUTLINED, size=60, color=ft.colors.OUTLINE), ft.Text("لا توجد بيانات مسجلة", font_family="Cairo Bold")], horizontal_alignment="center"), alignment=ft.alignment.center, padding=50))
+            page.update(); return
+        
+        valid_bgs = [r["bg"] for r in history if r["bg"] > 0]
+        avg_bg = sum(valid_bgs) / len(valid_bgs) if valid_bgs else 0
+        iob_now = calculate_iob()
+
+        stats_row = ft.Row([
+            ft.Container(content=ft.Column([ft.Icon(ft.colors.WATER_DROP, color=ft.colors.ON_PRIMARY_CONTAINER), ft.Text("متوسط السكر", size=11, color=ft.colors.ON_PRIMARY_CONTAINER), ft.Text(f"{round(avg_bg)}", font_family="Cairo Bold", size=18, color=ft.colors.ON_PRIMARY_CONTAINER)]), bgcolor=ft.colors.PRIMARY_CONTAINER, padding=10, border_radius=15, expand=True),
+            ft.Container(content=ft.Column([ft.Icon(ft.colors.TIMER, color=ft.colors.ON_SECONDARY_CONTAINER), ft.Text("أنسولين نشط", size=11, color=ft.colors.ON_SECONDARY_CONTAINER), ft.Text(f"{round(iob_now, 1)}u", font_family="Cairo Bold", size=18, color=ft.colors.ON_SECONDARY_CONTAINER)]), bgcolor=ft.colors.SECONDARY_CONTAINER, padding=10, border_radius=15, expand=True),
+        ])
+        dash_content.controls.append(stats_row)
+        dash_content.controls.append(ft.Row([ft.Icon(ft.colors.HISTORY, color=ft.colors.PRIMARY), ft.Text("السجل الطبي للجرعات:", font_family="Cairo Bold")]))
+        
+        for r in reversed(history[-15:]): 
+            dash_content.controls.append(
+                ft.Container(
+                    content=ft.ListTile(
+                        leading=ft.Icon(ft.colors.VACCINES, color=ft.colors.PRIMARY), 
+                        title=ft.Text(f"الجرعة: {round(r['dose'],1)} وحدة", font_family="Cairo Bold"), 
+                        subtitle=ft.Text(f"السكر: {r['bg']} | {r['time']}", font_family="Cairo", size=11),
+                        trailing=ft.IconButton(ft.colors.DELETE_OUTLINE, icon_color=ft.colors.ERROR, on_click=lambda e, t=r['time']: delete_history_record(t))
+                    ),
+                    bgcolor=ft.colors.SURFACE, border_radius=10
+                )
+            )
+        page.update()
+
+    dashboard_view = ft.Container(padding=20, content=ft.Column([ft.Text("المؤشرات والتقارير", size=24, font_family="Cairo Bold"), dash_content], expand=True))
+
+    # --- 8. قسم الإعدادات ---
+    def get_setting(key, default): val = page.client_storage.get(key); return float(val) if val is not None else default
+    icr_input = custom_textfield("معامل الكارب (ICR)", ft.colors.RESTAURANT, str(get_setting("icr", 10.0)), helper_text="جرامات الكارب لكل وحدة")
+    isf_input = custom_textfield("معامل الحساسية (ISF)", ft.colors.HEALING, str(get_setting("isf", 50.0)), helper_text="انخفاض السكر لكل وحدة")
+    target_bg_input = custom_textfield("السكر المستهدف", ft.colors.TRACK_CHANGES, str(get_setting("target_bg", 100.0)), helper_text="السكر المثالي")
+    
+    def save_settings(e):
+        try:
+            page.client_storage.set("icr", float(icr_input.value)); page.client_storage.set("isf", float(isf_input.value)); page.client_storage.set("target_bg", float(target_bg_input.value))
+            page.snack_bar = ft.SnackBar(ft.Text("تم الحفظ بنجاح", font_family="Cairo"), bgcolor=ft.colors.GREEN); page.snack_bar.open = True; page.update()
+        except: pass
+
+    settings_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Icon(ft.colors.SETTINGS, color=ft.colors.PRIMARY), ft.Text("الإعدادات الطبية", size=24, font_family="Cairo Bold")]), icr_input, isf_input, target_bg_input, ft.ElevatedButton("حفظ التحديثات", icon=ft.colors.SAVE, on_click=save_settings, style=ft.ButtonStyle(bgcolor=ft.colors.PRIMARY, color=ft.colors.ON_PRIMARY, padding=18, shape=ft.RoundedRectangleBorder(radius=15)), width=400)], spacing=15))
+
+    # --- 9. إدارة شريط التنقل ---
+    main_content = ft.AnimatedSwitcher(content=calculator_view, transition=ft.AnimatedSwitcherTransition.FADE, duration=400)
+    
+    def on_nav_change(e):
+        idx = e.control.selected_index
+        if idx == 0: main_content.content = calculator_view
+        elif idx == 1: update_filters_ui(); refresh_rems(); main_content.content = reminders_view
+        elif idx == 2: refresh_dashboard(); main_content.content = dashboard_view
+        else: main_content.content = settings_view
+        page.update()
+
+    page.navigation_bar = ft.NavigationBar(
+        selected_index=0, on_change=on_nav_change,
+        destinations=[
+            ft.NavigationDestination(icon=ft.colors.CALCULATE_OUTLINED, selected_icon=ft.colors.CALCULATE, label="الحاسبة"),
+            ft.NavigationDestination(icon=ft.colors.NOTIFICATIONS_OUTLINED, selected_icon=ft.colors.NOTIFICATIONS, label="التنبيهات"),
+            ft.NavigationDestination(icon=ft.colors.INSERT_CHART_OUTLINED, selected_icon=ft.colors.INSERT_CHART, label="التقارير"),
+            ft.NavigationDestination(icon=ft.colors.SETTINGS_OUTLINED, selected_icon=ft.colors.SETTINGS, label="الإعدادات"),
+        ]
+    )
+
+    page.add(ft.Column([app_header, ft.Container(content=main_content, expand=True)], expand=True, spacing=0))
+
+ft.app(main)
