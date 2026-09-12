@@ -1,4 +1,5 @@
 import flet as ft
+from flet import FilePicker  # استدعاء صريح لإجبار محرك الأندرويد على دمج الأداة
 from google import genai
 from google.genai import types
 import json
@@ -154,7 +155,8 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    file_picker = ft.FilePicker()
+    # استخدام الأداة المستدعاة صراحة
+    file_picker = FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
 
@@ -400,14 +402,14 @@ def main(page: ft.Page):
                 card = ft.Container(
                     content=ft.Column([
                         ft.Row([ft.Icon(icon, color=color, size=20), ft.Text(type_str, font_family="Cairo Bold", size=12, color=color), ft.Container(expand=True), ft.Icon("access_time", size=14), ft.Text(item['time'].replace(" & ", " | "), font_family="Cairo Bold", size=12)]),
-                        ft.Row([ft.Text(item['title'], font_family="Cairo Bold", size=16), ft.Container(expand=True), ft.IconButton("check_circle", icon_color="teal", icon_size=32, on_click=lambda e, i=item['id']: delete_rem(i))])
+                        ft.Row([ft.Text(item['title'], font_family="Cairo Bold", size=16), ft.Container(expand=True), ft.IconButton(icon="check_circle", icon_color="teal", icon_size=32, on_click=lambda e, i=item['id']: delete_rem(i))])
                     ], spacing=10),
                     bgcolor="grey100", padding=15, border_radius=15, border=ft.Border(left=ft.BorderSide(width=6, color=color))
                 )
                 reminders_list.controls.append(card)
         page.update()
 
-    reminders_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Text("مركز التنبيهات", size=24, font_family="Cairo Bold"), ft.IconButton("add_alarm", bgcolor="teal", icon_color="white", on_click=lambda e: setattr(add_rem_dialog, 'open', True) or page.update())], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), filters_row, reminders_list], expand=True, scroll="hidden"))
+    reminders_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Text("مركز التنبيهات", size=24, font_family="Cairo Bold"), ft.IconButton(icon="add_alarm", bgcolor="teal", icon_color="white", on_click=lambda e: setattr(add_rem_dialog, 'open', True) or page.update())], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), filters_row, reminders_list], expand=True, scroll="hidden"))
 
     def alarm_background_loop():
         while True:
@@ -486,7 +488,7 @@ def main(page: ft.Page):
                         leading=ft.Icon("vaccines", color="blue"), 
                         title=ft.Text(f"الجرعة: {round(r['dose'],1)} وحدة", font_family="Cairo Bold"), 
                         subtitle=ft.Text(f"السكر: {r['bg']} | {r['time']}", font_family="Cairo", size=11),
-                        trailing=ft.IconButton("delete_outline", icon_color="red", on_click=lambda e, t=r['time']: delete_history_record(t))
+                        trailing=ft.IconButton(icon="delete_outline", icon_color="red", on_click=lambda e, t=r['time']: delete_history_record(t))
                     ),
                     bgcolor="grey100", border_radius=10
                 )
@@ -528,7 +530,6 @@ def main(page: ft.Page):
     page.navigation_bar = ft.NavigationBar(
         selected_index=0, on_change=on_nav_change,
         destinations=[
-            # استخدام المسمى الصحيح المتوافق مع إصدار الأندرويد لـ Flet
             ft.NavigationBarDestination(icon="calculate_outlined", selected_icon="calculate", label="الحاسبة"),
             ft.NavigationBarDestination(icon="notifications_outlined", selected_icon="notifications", label="التنبيهات"),
             ft.NavigationBarDestination(icon="insert_chart_outlined", selected_icon="insert_chart", label="التقارير"),
