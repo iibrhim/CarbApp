@@ -40,7 +40,7 @@ client = genai.Client(api_key="AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2
 def main(page: ft.Page):
     # --- 1. إعدادات الصفحة والنمط التكيفي ---
     page.title = "نظام إدارة السكري"
-    page.rtl = True  # تفعيل الاتجاه العربي
+    page.rtl = True  
     page.theme = ft.Theme(color_scheme_seed="teal", use_material3=True)
     page.theme_mode = ft.ThemeMode.LIGHT
     page.window_width = 420 
@@ -122,7 +122,7 @@ def main(page: ft.Page):
         )
 
     # ========================================================
-    # --- 5. قسم الحاسبة الذكية (مع الصور الذكية) ---
+    # --- 5. قسم الحاسبة الذكية والذكاء الاصطناعي ---
     # ========================================================
     selected_images_paths = []
     images_row = ft.Row(wrap=True, spacing=10, alignment=ft.MainAxisAlignment.CENTER)
@@ -152,7 +152,7 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    # استخدام ft.FilePicker صراحةً حتى يتمكن الأندرويد من تضمينها
+    # كتابة ft.FilePicker ليتمكن محرك بناء الأندرويد من تضمينها
     file_picker = ft.FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
@@ -176,7 +176,7 @@ def main(page: ft.Page):
         
         loading_ring.visible = True; ai_details_card.visible = False; result_card.visible = False; page.update()
         try:
-            prompt_text = f"""أنت خبير تغذية سريرية لمرضى السكري. قم بحساب الكارب بدقة.
+            prompt_text = f"""أنت خبير تغذية سريرية لمرضى السكري. قم بحساب الكارب بدقة للصور المرفقة.
             ملاحظة إضافية من المستخدم: '{meal_description_input.value}'.
             الرد **فقط** بتنسيق JSON: {{"net_carbs_grams": 0, "meal_description": "وصف دقيق", "impact_alert": "تأثير الوجبة", "items": [{{"name": "المكون", "weight_g": 0, "carbs_g": 0}}]}}"""
             
@@ -253,9 +253,9 @@ def main(page: ft.Page):
         padding=20,
         content=ft.Column([
             ft.Divider(height=10, color="transparent"),
-            current_bg_input,
-            upload_zone, # تمت إضافة منطقة التحميل بنجاح
-            images_row,  # تمت إضافة عارض الصور بنجاح
+            current_bg_input, 
+            upload_zone, 
+            images_row,
             meal_description_input,
             ft.ElevatedButton("(الخطوة الأولى) تحليل الذكاء الاصطناعي", icon=ft.Icons.AUTO_AWESOME, on_click=analyze_meal, style=ft.ButtonStyle(bgcolor="teal", color="white", padding=18, shape=ft.RoundedRectangleBorder(radius=15)), width=400),
             loading_ring, ai_details_card,
