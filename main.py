@@ -528,10 +528,11 @@ def main(page: ft.Page):
     page.navigation_bar = ft.NavigationBar(
         selected_index=0, on_change=on_nav_change,
         destinations=[
-            ft.NavigationDestination(icon="calculate_outlined", selected_icon="calculate", label="الحاسبة"),
-            ft.NavigationDestination(icon="notifications_outlined", selected_icon="notifications", label="التنبيهات"),
-            ft.NavigationDestination(icon="insert_chart_outlined", selected_icon="insert_chart", label="التقارير"),
-            ft.NavigationDestination(icon="settings_outlined", selected_icon="settings", label="الإعدادات"),
+            # استخدام المسمى الصحيح المتوافق مع إصدار الأندرويد لـ Flet
+            ft.NavigationBarDestination(icon="calculate_outlined", selected_icon="calculate", label="الحاسبة"),
+            ft.NavigationBarDestination(icon="notifications_outlined", selected_icon="notifications", label="التنبيهات"),
+            ft.NavigationBarDestination(icon="insert_chart_outlined", selected_icon="insert_chart", label="التقارير"),
+            ft.NavigationBarDestination(icon="settings_outlined", selected_icon="settings", label="الإعدادات"),
         ]
     )
 
