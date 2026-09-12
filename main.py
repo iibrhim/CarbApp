@@ -27,7 +27,6 @@ def main(page: ft.Page):
         theme_icon.icon = "dark_mode" if page.theme_mode == ft.ThemeMode.LIGHT else "light_mode"
         page.update()
 
-    # استخدام نصوص مباشرة للأيقونات لتجنب مشاكل التوافق على الجوال
     theme_icon = ft.IconButton(icon="dark_mode", icon_color="white", on_click=toggle_theme)
 
     app_header = ft.Container(
@@ -36,7 +35,8 @@ def main(page: ft.Page):
             ft.Text("نظام إدارة السكري", size=24, color="white", font_family="Cairo Bold", text_align=ft.TextAlign.CENTER, expand=True),
             theme_icon
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        gradient=ft.LinearGradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right, colors=["#0F766E", "#0284C7"]),
+        # استخدام الإحداثيات الرياضية الدقيقة لتجنب أخطاء الأندرويد
+        gradient=ft.LinearGradient(begin=ft.Alignment(-1.0, -1.0), end=ft.Alignment(1.0, 1.0), colors=["#0F766E", "#0284C7"]),
         padding=ft.padding.only(top=50, bottom=20, left=20, right=20),
         border_radius=ft.border_radius.only(bottom_left=30, bottom_right=30),
         shadow=ft.BoxShadow(spread_radius=1, blur_radius=10, color="black26", offset=ft.Offset(0, 5))
@@ -111,7 +111,7 @@ def main(page: ft.Page):
     description_input = custom_textfield("ملاحظة إضافية للذكاء الاصطناعي (اختياري)", ft.icons.EDIT_NOTE, multiline=True)
     extracted_carbs_input = custom_textfield("صافي الكارب (جم)", ft.icons.RESTAURANT_MENU, helper_text="يمكنك إدخال أو تعديل الرقم يدوياً")
     
-    loading_ring = ft.Container(content=ft.Column([ft.ProgressRing(stroke_width=4), ft.Text("الذكاء الاصطناعي يحلل...", font_family="Cairo Bold")], horizontal_alignment="center"), alignment=ft.alignment.center, visible=False)
+    loading_ring = ft.Container(content=ft.Column([ft.ProgressRing(stroke_width=4), ft.Text("الذكاء الاصطناعي يحلل...", font_family="Cairo Bold")], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), visible=False)
     
     ai_details_card_content = ft.Column(spacing=10)
     ai_details_card = ft.Container(border_radius=20, padding=20, visible=False, content=ai_details_card_content)
@@ -202,7 +202,7 @@ def main(page: ft.Page):
                         ft.Text("الجرعة النهائية المقترحة", font_family="Cairo", color="white", size=12),
                         ft.Row([ft.Text(f"{round(total_dose, 1)}", font_family="Cairo Bold", size=36, color="white"), ft.Text("وحدة", font_family="Cairo", size=18, color="white")], alignment=ft.MainAxisAlignment.CENTER)
                     ], horizontal_alignment="center", spacing=0),
-                    bgcolor="teal", padding=20, border_radius=15, alignment=ft.alignment.center
+                    bgcolor="teal", padding=20, border_radius=15, alignment=ft.Alignment(0.0, 0.0)
                 )
             )
             
@@ -354,7 +354,7 @@ def main(page: ft.Page):
         all_data = load_rems(); curr = page.session.get("rem_filter")
         data = all_data if curr == "all" else [d for d in all_data if d['type'] == curr]
 
-        if not data: reminders_list.controls.append(ft.Container(content=ft.Column([ft.Icon(ft.icons.NOTIFICATIONS_NONE, size=70, color="grey"), ft.Text("لا توجد تنبيهات", font_family="Cairo Bold", size=18)], horizontal_alignment="center"), alignment=ft.alignment.center, padding=60))
+        if not data: reminders_list.controls.append(ft.Container(content=ft.Column([ft.Icon(ft.icons.NOTIFICATIONS_NONE, size=70, color="grey"), ft.Text("لا توجد تنبيهات", font_family="Cairo Bold", size=18)], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), padding=60))
         else:
             for item in data:
                 icon = ft.icons.MEDICATION if item['type'] == 'med' else (ft.icons.CALENDAR_MONTH if item['type'] == 'appt' else ft.icons.REPEAT)
@@ -429,7 +429,7 @@ def main(page: ft.Page):
         dash_content.controls.clear()
         history = load_history()
         if not history:
-            dash_content.controls.append(ft.Container(content=ft.Column([ft.Icon(ft.icons.INSERT_CHART_OUTLINED, size=60, color="grey"), ft.Text("لا توجد بيانات مسجلة", font_family="Cairo Bold")], horizontal_alignment="center"), alignment=ft.alignment.center, padding=50))
+            dash_content.controls.append(ft.Container(content=ft.Column([ft.Icon(ft.icons.INSERT_CHART_OUTLINED, size=60, color="grey"), ft.Text("لا توجد بيانات مسجلة", font_family="Cairo Bold")], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), padding=50))
             page.update(); return
         
         valid_bgs = [r["bg"] for r in history if r["bg"] > 0]
