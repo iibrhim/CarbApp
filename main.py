@@ -126,7 +126,6 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    # إنشاء المكون بشكل منفصل وتعيين الخاصية لتجنب خطأ unexpected keyword argument
     file_picker = ft.FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
@@ -236,19 +235,24 @@ def main(page: ft.Page):
     # ========================================================
     # --- 6. قسم مركز التنبيهات ---
     # ========================================================
-    page.session.set("rem_filter", "all")
+    # استبدال page.session بمتغير بايثون قياسي 100%
+    filter_state = {"current": "all"}
+    
     reminders_list = ft.Column(spacing=15, scroll="hidden", expand=True)
     filters_row = ft.Row(scroll="hidden", spacing=10)
 
     def update_filters_ui():
         filters_row.controls.clear()
-        curr = page.session.get("rem_filter")
+        curr = filter_state["current"]
         def create_chip(label, f_type, is_active):
             return ft.Container(content=ft.Text(label, font_family="Cairo Bold", color="white" if is_active else "black", size=13), bgcolor="teal" if is_active else "grey200", padding=ft.Padding(left=16, right=16, top=8, bottom=8), border_radius=20, on_click=lambda e, ft_type=f_type: apply_filter(ft_type))
         filters_row.controls.extend([create_chip("الكل 📋", "all", curr == "all"), create_chip("أدوية 💊", "med", curr == "med"), create_chip("مواعيد 📅", "appt", curr == "appt"), create_chip("صرف 🔄", "refill", curr == "refill")])
         page.update()
 
-    def apply_filter(f_type): page.session.set("rem_filter", f_type); update_filters_ui(); refresh_rems()
+    def apply_filter(f_type): 
+        filter_state["current"] = f_type
+        update_filters_ui()
+        refresh_rems()
 
     rem_type = ft.Dropdown(label="نوع التنبيه", options=[ft.dropdown.Option("med", "💊 تذكير دواء"), ft.dropdown.Option("appt", "📅 موعد طبي"), ft.dropdown.Option("refill", "🔄 إعادة صرف")], value="med", border_radius=15, filled=True, border_color="transparent", text_style=ft.TextStyle(font_family="Cairo Bold"))
     med_freq = ft.Dropdown(label="التكرار", options=[ft.dropdown.Option("مرة يومياً", "مرة واحدة يومياً"), ft.dropdown.Option("مرتين يومياً", "مرتين يومياً"), ft.dropdown.Option("عند الحاجة", "عند الحاجة")], value="مرة يومياً", border_radius=15, filled=True, border_color="transparent", text_style=ft.TextStyle(font_family="Cairo Bold"), visible=True)
@@ -350,7 +354,8 @@ def main(page: ft.Page):
 
     def refresh_rems():
         reminders_list.controls.clear()
-        all_data = load_rems(); curr = page.session.get("rem_filter")
+        all_data = load_rems()
+        curr = filter_state["current"]
         data = all_data if curr == "all" else [d for d in all_data if d['type'] == curr]
 
         if not data: reminders_list.controls.append(ft.Container(content=ft.Column([ft.Icon("notifications_none", size=70, color="grey"), ft.Text("لا توجد تنبيهات", font_family="Cairo Bold", size=18)], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), padding=60))
