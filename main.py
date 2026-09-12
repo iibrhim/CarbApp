@@ -73,7 +73,7 @@ def main(page: ft.Page):
             except: pass
         return max(0.0, iob)
 
-    # --- 3. المنبه والتنبيهات الخلفية (تم استبدال كل الأيقونات بنصوص) ---
+    # --- 3. المنبه والتنبيهات الخلفية ---
     def dismiss_alarm(e):
         alarm_dialog.open = False
         page.update()
@@ -88,12 +88,13 @@ def main(page: ft.Page):
 
     # --- 4. حقول الإدخال الذكية ---
     def custom_textfield(label, icon, value="", multiline=False, helper_text=None, disabled=False):
+        # تم استبدال helper_text بـ hint_text لتفادي مشاكل الدعم في الأندرويد
         return ft.TextField(
             label=label, value=value, prefix_icon=icon, border_radius=15, filled=True,
             border_color="transparent", multiline=multiline,
             keyboard_type="text" if multiline else "number", disabled=disabled,
             text_style=ft.TextStyle(font_family="Cairo Bold"),
-            helper_text=helper_text, helper_style=ft.TextStyle(font_family="Cairo", size=11) if helper_text else None
+            hint_text=helper_text
         )
 
     # ========================================================
