@@ -1,46 +1,22 @@
 import flet as ft
+# الاستدعاء الصريح لإجبار الأندرويد على دمج الملحقات في التطبيق
+import flet_file_picker
+import flet_audio
+import flet_shared_preferences
+
 from google import genai
 from google.genai import types
 import json
 import datetime
 import threading
 import time
-import os
-
-# ========================================================
-# --- محرك التخزين المحلي الأصيل ---
-# ========================================================
-STORAGE_FILE = os.path.join(os.environ.get("HOME", os.getcwd()), "carbapp_storage.json")
-
-def get_storage(key, default=None):
-    try:
-        if os.path.exists(STORAGE_FILE):
-            with open(STORAGE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get(key, default)
-    except: pass
-    return default
-
-def set_storage(key, value):
-    data = {}
-    try:
-        if os.path.exists(STORAGE_FILE):
-            with open(STORAGE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-    except: pass
-    data[key] = value
-    try:
-        with open(STORAGE_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-    except: pass
-
 
 client = genai.Client(api_key="AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg")
 
 def main(page: ft.Page):
     # --- 1. إعدادات الصفحة والنمط التكيفي ---
     page.title = "نظام إدارة السكري"
-    page.rtl = True  
+    page.rtl = True  # تفعيل الاتجاه العربي 100%
     page.theme = ft.Theme(color_scheme_seed="teal", use_material3=True)
     page.theme_mode = ft.ThemeMode.LIGHT
     page.window_width = 420 
@@ -69,10 +45,11 @@ def main(page: ft.Page):
 
     # --- 2. إدارة السجل والأنسولين النشط ---
     def load_history():
-        return get_storage("user_history", [])
+        h = page.client_storage.get("user_history")
+        return json.loads(h) if h else []
 
     def save_history(data):
-        set_storage("user_history", data)
+        page.client_storage.set("user_history", json.dumps(data))
 
     def log_dose(dose, bg):
         if dose <= 0: return
@@ -98,15 +75,19 @@ def main(page: ft.Page):
             except: pass
         return max(0.0, iob)
 
-    # --- 3. المنبه والتنبيهات الخلفية ---
+    # --- 3. المنبه والتنبيهات الخلفية (استعادة الصوت) ---
+    alarm_audio = ft.Audio(src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg", autoplay=False)
+    page.overlay.append(alarm_audio)
+
     def dismiss_alarm(e):
+        alarm_audio.pause()
         alarm_dialog.open = False
         page.update()
 
     alarm_dialog = ft.AlertDialog(
         title=ft.Row([ft.Icon(ft.Icons.ALARM, color="red"), ft.Text("حان وقت التنبيه!", weight=ft.FontWeight.BOLD, color="red")]),
         content=ft.Text("", size=18, text_align="center", weight=ft.FontWeight.BOLD),
-        actions=[ft.ElevatedButton("حسناً، تم", on_click=dismiss_alarm, bgcolor="red", color="white", icon=ft.Icons.CHECK_CIRCLE)],
+        actions=[ft.ElevatedButton("إيقاف الرنين", on_click=dismiss_alarm, bgcolor="red", color="white", icon=ft.Icons.STOP_CIRCLE)],
         shape=ft.RoundedRectangleBorder(radius=20), modal=True
     )
     page.overlay.append(alarm_dialog)
@@ -122,13 +103,13 @@ def main(page: ft.Page):
         )
 
     # ========================================================
-    # --- 5. قسم الحاسبة الذكية والذكاء الاصطناعي ---
+    # --- 5. قسم الحاسبة الذكية (استعادة معرض الصور بالكامل) ---
     # ========================================================
     selected_images_paths = []
     images_row = ft.Row(wrap=True, spacing=10, alignment=ft.MainAxisAlignment.CENTER)
     
     current_bg_input = custom_textfield("مستوى السكر الحالي", ft.Icons.MONITOR_HEART)
-    meal_description_input = custom_textfield("ملاحظة إضافية للذكاء الاصطناعي (اختياري)", ft.Icons.EDIT_NOTE, multiline=True)
+    description_input = custom_textfield("ملاحظة إضافية للذكاء الاصطناعي (اختياري)", ft.Icons.EDIT_NOTE, multiline=True)
     extracted_carbs_input = custom_textfield("صافي الكارب (جم)", ft.Icons.CALCULATE, helper_text="الرقم المستخرج من الذكاء الاصطناعي")
     
     loading_ring = ft.Container(content=ft.Column([ft.ProgressRing(stroke_width=4), ft.Text("الذكاء الاصطناعي يحلل...", weight=ft.FontWeight.BOLD)], horizontal_alignment="center"), alignment=ft.Alignment(0.0, 0.0), visible=False)
@@ -152,9 +133,7 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    # كتابة ft.FilePicker ليتمكن محرك بناء الأندرويد من تضمينها
-    file_picker = ft.FilePicker()
-    file_picker.on_result = on_file_picked
+    file_picker = ft.FilePicker(on_result=on_file_picked)
     page.overlay.append(file_picker)
 
     upload_zone = ft.Container(
@@ -170,17 +149,15 @@ def main(page: ft.Page):
     )
 
     def analyze_meal(e):
-        if not selected_images_paths and not meal_description_input.value:
-            page.snack_bar = ft.SnackBar(ft.Text("الرجاء إرفاق صورة للوجبة أو كتابة وصفها!"), bgcolor="red")
+        if not selected_images_paths:
+            page.snack_bar = ft.SnackBar(ft.Text("الرجاء إرفاق صورة للوجبة أولاً!"), bgcolor="red")
             page.snack_bar.open = True; page.update(); return
         
         loading_ring.visible = True; ai_details_card.visible = False; result_card.visible = False; page.update()
         try:
-            prompt_text = f"""أنت خبير تغذية سريرية لمرضى السكري. قم بحساب الكارب بدقة للصور المرفقة.
-            ملاحظة إضافية من المستخدم: '{meal_description_input.value}'.
-            الرد **فقط** بتنسيق JSON: {{"net_carbs_grams": 0, "meal_description": "وصف دقيق", "impact_alert": "تأثير الوجبة", "items": [{{"name": "المكون", "weight_g": 0, "carbs_g": 0}}]}}"""
+            parts = [f"""أنت خبير تغذية سريرية لمرضى السكري. حلل الصور المرفقة. الملاحظة: '{description_input.value}'.
+            الرد **فقط** بتنسيق JSON: {{"net_carbs_grams": 0, "meal_description": "وصف دقيق", "impact_alert": "تأثير الوجبة", "items": [{{"name": "المكون", "weight_g": 0, "carbs_g": 0}}]}}"""]
             
-            parts = [prompt_text]
             for path in selected_images_paths:
                 with open(path, "rb") as image_file: parts.append(types.Part.from_bytes(data=image_file.read(), mime_type='image/jpeg'))
             
@@ -213,10 +190,10 @@ def main(page: ft.Page):
     def calculate_final_dose(e):
         try:
             carbs = float(extracted_carbs_input.value) if extracted_carbs_input.value else 0.0
-            bg = float(current_bg_input.value) if current_bg_input.value else float(get_storage("target_bg", 100.0))
-            icr = float(get_storage("icr", 10.0))
-            isf = float(get_storage("isf", 50.0))
-            target = float(get_storage("target_bg", 100.0))
+            bg = float(current_bg_input.value) if current_bg_input.value else float(page.client_storage.get("target_bg") or 100.0)
+            icr = float(page.client_storage.get("icr") or 10.0)
+            isf = float(page.client_storage.get("isf") or 50.0)
+            target = float(page.client_storage.get("target_bg") or 100.0)
             
             iob = calculate_iob()
             meal_dose = carbs / icr
@@ -252,11 +229,9 @@ def main(page: ft.Page):
     calculator_view = ft.Container(
         padding=20,
         content=ft.Column([
+            upload_zone, images_row,
             ft.Divider(height=10, color="transparent"),
-            current_bg_input, 
-            upload_zone, 
-            images_row,
-            meal_description_input,
+            current_bg_input, description_input,
             ft.ElevatedButton("(الخطوة الأولى) تحليل الذكاء الاصطناعي", icon=ft.Icons.AUTO_AWESOME, on_click=analyze_meal, style=ft.ButtonStyle(bgcolor="teal", color="white", padding=18, shape=ft.RoundedRectangleBorder(radius=15)), width=400),
             loading_ring, ai_details_card,
             ft.Divider(color="grey"),
@@ -359,8 +334,12 @@ def main(page: ft.Page):
     time_picker_2 = ft.TimePicker(on_change=on_time2_picked)
     page.overlay.extend([date_picker_1, time_picker_1, time_picker_2])
 
-    def load_rems(): return get_storage("user_rems", [])
-    def save_rems(data): set_storage("user_rems", data)
+    def load_rems(): 
+        r = page.client_storage.get("user_rems")
+        return json.loads(r) if r else []
+
+    def save_rems(data): 
+        page.client_storage.set("user_rems", json.dumps(data))
     
     def delete_rem(rem_id): 
         save_rems([d for d in load_rems() if d['id'] != rem_id])
@@ -440,7 +419,8 @@ def main(page: ft.Page):
                         notif_now_key = f"notified_now_{target_time}_{current_date}" if is_daily else f"notified_now_{target_time}"
                         if target_time == cmp_current and item.get("last_now") != notif_now_key:
                             item["last_now"] = notif_now_key; needs_save = True
-                            alarm_dialog.content.value = item['title']; alarm_dialog.open = True; page.update()
+                            alarm_dialog.content.value = item['title']; alarm_dialog.open = True
+                            alarm_audio.play(); page.update()
 
                         if item.get("day_before") and not is_daily:
                             try:
@@ -503,7 +483,7 @@ def main(page: ft.Page):
 
     # --- 8. قسم الإعدادات ---
     def get_setting(key, default): 
-        val = get_storage(key)
+        val = page.client_storage.get(key)
         return float(val) if val is not None else default
 
     icr_input = custom_textfield("معامل الكارب (ICR)", ft.Icons.RESTAURANT, str(get_setting("icr", 10.0)), helper_text="جرامات الكارب لكل وحدة")
@@ -512,9 +492,9 @@ def main(page: ft.Page):
     
     def save_settings(e):
         try:
-            set_storage("icr", float(icr_input.value))
-            set_storage("isf", float(isf_input.value))
-            set_storage("target_bg", float(target_bg_input.value))
+            page.client_storage.set("icr", float(icr_input.value))
+            page.client_storage.set("isf", float(isf_input.value))
+            page.client_storage.set("target_bg", float(target_bg_input.value))
             page.snack_bar = ft.SnackBar(ft.Text("تم الحفظ بنجاح"), bgcolor="green"); page.snack_bar.open = True; page.update()
         except: pass
 
