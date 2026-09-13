@@ -1,5 +1,4 @@
 import flet as ft
-import flet_file_picker  # <-- هذا السطر السحري يجبر الأندرويد على بناء معرض الصور
 from google import genai
 from google.genai import types
 import json
@@ -146,15 +145,14 @@ def main(page: ft.Page):
             images_row.controls.append(ft.Image(src=path, width=70, height=70, fit=ft.ImageFit.COVER, border_radius=10))
         page.update()
 
-    # إزالة التلميح النوعي للحدث لتجنب أي أخطاء من المحرك
-    def on_file_picked(e):
+    def on_file_picked(e: ft.FilePickerResultEvent):
         if e.files:
             selected_images_paths.clear()
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    # <-- الاستخدام المباشر للمكتبة الخارجية
-    file_picker = flet_file_picker.FilePicker()
+    # استخدام الطريقة القياسية ليقوم الخادم بمسح الكود واكتشاف الأداة بنجاح
+    file_picker = ft.FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
 
