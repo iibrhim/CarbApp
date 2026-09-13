@@ -19,14 +19,29 @@ def main(page: ft.Page):
     page.padding = 0
 
     # ========================================================
-    # --- محرك التخزين المحلي الآمن للويب (Client Storage) ---
+    # --- محرك التخزين الهجين (المضاد لانهيار المتصفحات) ---
     # ========================================================
+    fallback_db = {}
+    
     def get_storage(key, default=None):
-        val = page.client_storage.get(key)
-        return val if val is not None else default
+        try:
+            if hasattr(page, "client_storage") and page.client_storage is not None:
+                val = page.client_storage.get(key)
+                if val is not None: return val
+            if hasattr(page, "session") and page.session is not None:
+                val = page.session.get(key)
+                if val is not None: return val
+        except: pass
+        return fallback_db.get(key, default)
 
     def set_storage(key, value):
-        page.client_storage.set(key, value)
+        fallback_db[key] = value
+        try:
+            if hasattr(page, "client_storage") and page.client_storage is not None:
+                page.client_storage.set(key, value)
+            if hasattr(page, "session") and page.session is not None:
+                page.session.set(key, value)
+        except: pass
 
     def toggle_theme(e):
         page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
@@ -123,14 +138,14 @@ def main(page: ft.Page):
     def update_images_ui():
         images_row.controls.clear()
         for path in selected_images_paths: 
-            if path: # يتجاهل المسار الوهمي في المتصفح
+            if path:
                 images_row.controls.append(ft.Image(src=path, width=70, height=70, fit=ft.ImageFit.COVER, border_radius=10))
         page.update()
 
     def on_file_picked(e: ft.FilePickerResultEvent):
         if e.files:
             selected_images_paths.clear()
-            for f in e.files: selected_images_paths.append(f.path) # f.path يكون None في الويب لأسباب أمنية
+            for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
     file_picker = ft.FilePicker()
@@ -161,7 +176,6 @@ def main(page: ft.Page):
             
             parts = [{"text": prompt_text}]
             
-            # محاولة قراءة الصورة إن كان التطبيق يعمل خارج المتصفح (تطبيق كمبيوتر أو جوال)
             for path in selected_images_paths:
                 if path:
                     try:
@@ -170,7 +184,6 @@ def main(page: ft.Page):
                             parts.append({"inline_data": {"mime_type": "image/jpeg", "data": encoded}})
                     except: pass
             
-            # الاتصال المباشر عبر API الخفيف والسريع للويب
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
             headers = {'Content-Type': 'application/json'}
             data = {"contents": [{"parts": parts}]}
