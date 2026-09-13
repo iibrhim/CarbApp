@@ -28,7 +28,6 @@ jobs:
           pip install flet google-genai
 
       - name: Prepare Flet Build Config
-        # تم إزالة flet-file-picker من قائمة dependencies لكي لا ينهار البناء
         run: |
           cat << EOF > pyproject.toml
           [project]
@@ -55,8 +54,8 @@ jobs:
         run: yes | flutter doctor --android-licenses
 
       - name: Build Android APK
-        # بيئة البناء الآن نظيفة ولن تسأل عن شيء، لذلك نستخدم أمر البناء المباشر
-        run: flet build apk
+        # أعدنا الإجابة التلقائية "نعم" ليتجاوز سؤال التحميل فوراً
+        run: echo "y" | flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
