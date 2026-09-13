@@ -1,0 +1,15 @@
+[project]
+name = "carbapp"
+version = "1.0.0"
+description = "Smart Diabetes Management System"
+dependencies = [
+    "flet",
+    "google-genai",
+]
+
+[tool.flet]
+org = "com.ibrahim.carbapp"
+product = "حاسبة الكارب الذكية"
+
+[tool.flet.app]
+module = "main"
