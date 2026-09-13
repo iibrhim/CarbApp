@@ -20,11 +20,9 @@ jobs:
       - name: Install Python Packages
         run: |
           python -m pip install --upgrade pip
-          # تم إزالة flet-file-picker الوهمية من أمر التثبيت لمنع الانهيار
           pip install flet google-genai
 
       - name: Prepare Flet Build Config
-        # هذا الأمر يخبر محرك الأندرويد بدمج الكاميرا ومعرض الصور
         run: |
           cat << EOF > pyproject.toml
           [project]
@@ -48,7 +46,8 @@ jobs:
           channel: 'stable'
 
       - name: Build Android APK
-        run: flet build apk
+        # هنا أضفنا yes | للإجابة بنعم تلقائياً على سؤال تثبيت Flutter
+        run: yes | flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
