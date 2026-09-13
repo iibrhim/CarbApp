@@ -1,39 +1,11 @@
 import flet as ft
-from google import genai
-from google.genai import types
 import json
 import datetime
 import asyncio
-import os
+import base64
+import requests
 
-# ========================================================
-# --- محرك التخزين المحلي الأصيل ---
-# ========================================================
-STORAGE_FILE = os.path.join(os.environ.get("HOME", os.getcwd()), "carbapp_storage.json")
-
-def get_storage(key, default=None):
-    try:
-        if os.path.exists(STORAGE_FILE):
-            with open(STORAGE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get(key, default)
-    except: pass
-    return default
-
-def set_storage(key, value):
-    data = {}
-    try:
-        if os.path.exists(STORAGE_FILE):
-            with open(STORAGE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-    except: pass
-    data[key] = value
-    try:
-        with open(STORAGE_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-    except: pass
-
-client = genai.Client(api_key="AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg")
+API_KEY = "AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg"
 
 def main(page: ft.Page):
     # --- 1. إعدادات الصفحة والنمط التكيفي ---
@@ -45,6 +17,16 @@ def main(page: ft.Page):
     page.window_height = 800
     page.horizontal_alignment = "center"
     page.padding = 0
+
+    # ========================================================
+    # --- محرك التخزين المحلي الآمن للويب (Client Storage) ---
+    # ========================================================
+    def get_storage(key, default=None):
+        val = page.client_storage.get(key)
+        return val if val is not None else default
+
+    def set_storage(key, value):
+        page.client_storage.set(key, value)
 
     def toggle_theme(e):
         page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
@@ -67,7 +49,7 @@ def main(page: ft.Page):
 
     # --- 2. إدارة السجل والأنسولين النشط ---
     def load_history():
-        return get_storage("user_history", [])
+        return get_storage("user_history") or []
 
     def save_history(data):
         set_storage("user_history", data)
@@ -141,16 +123,16 @@ def main(page: ft.Page):
     def update_images_ui():
         images_row.controls.clear()
         for path in selected_images_paths: 
-            images_row.controls.append(ft.Image(src=path, width=70, height=70, fit=ft.ImageFit.COVER, border_radius=10))
+            if path: # يتجاهل المسار الوهمي في المتصفح
+                images_row.controls.append(ft.Image(src=path, width=70, height=70, fit=ft.ImageFit.COVER, border_radius=10))
         page.update()
 
     def on_file_picked(e: ft.FilePickerResultEvent):
         if e.files:
             selected_images_paths.clear()
-            for f in e.files: selected_images_paths.append(f.path)
+            for f in e.files: selected_images_paths.append(f.path) # f.path يكون None في الويب لأسباب أمنية
             update_images_ui()
 
-    # -- الإصلاح المزدوج: فصل السطرين كما فعلنا سابقاً لتجنب خطأ الـ keyword argument --
     file_picker = ft.FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
@@ -159,7 +141,7 @@ def main(page: ft.Page):
         content=ft.Column([
             ft.Icon(ft.Icons.CLOUD_UPLOAD, size=40, color="teal"),
             ft.Text("اضغط لإضافة صور الوجبة أو الملصق", weight=ft.FontWeight.BOLD, size=15),
-            ft.Text("يمكنك دمج أكثر من صورة للتحليل", size=11)
+            ft.Text("في الويب: يرجى كتابة ملاحظة نصية لتخطي أمان المتصفح", size=11, color="red")
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
         padding=ft.Padding(left=20, right=20, top=20, bottom=20),
         border=ft.Border(top=ft.BorderSide(width=2, color="teal"), bottom=ft.BorderSide(width=2, color="teal"), left=ft.BorderSide(width=2, color="teal"), right=ft.BorderSide(width=2, color="teal")),
@@ -169,7 +151,7 @@ def main(page: ft.Page):
 
     def analyze_meal(e):
         if not selected_images_paths and not description_input.value:
-            page.snack_bar = ft.SnackBar(ft.Text("الرجاء إرفاق صورة للوجبة أو كتابة وصفها!"), bgcolor="red")
+            page.snack_bar = ft.SnackBar(ft.Text("الرجاء كتابة وصف للوجبة!"), bgcolor="red")
             page.snack_bar.open = True; page.update(); return
         
         loading_ring.visible = True; ai_details_card.visible = False; result_card.visible = False; page.update()
@@ -177,34 +159,49 @@ def main(page: ft.Page):
             prompt_text = f"""أنت خبير تغذية سريرية لمرضى السكري. حلل الصور المرفقة إن وجدت، أو الوصف التالي: '{description_input.value}'.
             الرد **فقط** بتنسيق JSON: {{"net_carbs_grams": 0, "meal_description": "وصف دقيق", "impact_alert": "تأثير الوجبة", "items": [{{"name": "المكون", "weight_g": 0, "carbs_g": 0}}]}}"""
             
-            parts = [prompt_text]
-            for path in selected_images_paths:
-                with open(path, "rb") as image_file: parts.append(types.Part.from_bytes(data=image_file.read(), mime_type='image/jpeg'))
+            parts = [{"text": prompt_text}]
             
-            response = client.models.generate_content(model='gemini-3.6-flash', contents=parts)
-            raw_text = response.text.strip()
+            # محاولة قراءة الصورة إن كان التطبيق يعمل خارج المتصفح (تطبيق كمبيوتر أو جوال)
+            for path in selected_images_paths:
+                if path:
+                    try:
+                        with open(path, "rb") as image_file:
+                            encoded = base64.b64encode(image_file.read()).decode("utf-8")
+                            parts.append({"inline_data": {"mime_type": "image/jpeg", "data": encoded}})
+                    except: pass
+            
+            # الاتصال المباشر عبر API الخفيف والسريع للويب
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+            headers = {'Content-Type': 'application/json'}
+            data = {"contents": [{"parts": parts}]}
+            
+            response = requests.post(url, headers=headers, json=data)
+            response_data = response.json()
+            
+            raw_text = response_data['candidates'][0]['content']['parts'][0]['text'].strip()
+            
             if raw_text.startswith("```json"): raw_text = raw_text[7:-3]
             elif raw_text.startswith("```"): raw_text = raw_text[3:-3]
-            data = json.loads(raw_text)
+            result_data = json.loads(raw_text)
             
-            extracted_carbs_input.value = str(data.get("net_carbs_grams", 0))
+            extracted_carbs_input.value = str(result_data.get("net_carbs_grams", 0))
             
             ai_details_card_content.controls.clear()
             ai_details_card_content.controls.append(ft.Row([ft.Icon(ft.Icons.AUTO_AWESOME, color="teal"), ft.Text("تحليل الذكاء الاصطناعي", weight=ft.FontWeight.BOLD, size=18)]))
-            ai_details_card_content.controls.append(ft.Text(data.get("meal_description", "تم التحليل بنجاح."), size=14))
+            ai_details_card_content.controls.append(ft.Text(result_data.get("meal_description", "تم التحليل بنجاح."), size=14))
             
             items_wrap = ft.Row(wrap=True, spacing=8)
-            for item in data.get("items", []):
+            for item in result_data.get("items", []):
                 items_wrap.controls.append(
                     ft.Container(content=ft.Row([ft.Icon(ft.Icons.RESTAURANT, size=12), ft.Text(f"{item['name']} ({item['weight_g']}ج)", weight=ft.FontWeight.BOLD, size=12)], spacing=4), bgcolor="bluegrey200", padding=ft.Padding(left=10, right=10, top=6, bottom=6), border_radius=15)
                 )
             ai_details_card_content.controls.append(items_wrap)
             
-            impact = data.get("impact_alert", "")
+            impact = result_data.get("impact_alert", "")
             if impact: ai_details_card_content.controls.append(ft.Container(content=ft.Row([ft.Icon(ft.Icons.WARNING_AMBER, color="orange"), ft.Text(impact, weight=ft.FontWeight.BOLD, size=12, expand=True)]), bgcolor="orange100", padding=12, border_radius=10, margin=ft.Margin(left=0, right=0, top=5, bottom=0)))
             ai_details_card.visible = True
         except Exception as ex: 
-            page.snack_bar = ft.SnackBar(ft.Text(f"حدث خطأ أثناء تحليل الصور"), bgcolor="red"); page.snack_bar.open = True
+            page.snack_bar = ft.SnackBar(ft.Text("حدث خطأ أثناء الاتصال بالذكاء الاصطناعي"), bgcolor="red"); page.snack_bar.open = True
         finally: loading_ring.visible = False; page.update()
 
     def calculate_final_dose(e):
@@ -356,7 +353,7 @@ def main(page: ft.Page):
     time_picker_2 = ft.TimePicker(on_change=on_time2_picked)
     page.overlay.extend([date_picker_1, time_picker_1, time_picker_2])
 
-    def load_rems(): return get_storage("user_rems", [])
+    def load_rems(): return get_storage("user_rems") or []
     def save_rems(data): set_storage("user_rems", data)
     
     def delete_rem(rem_id): 
@@ -412,7 +409,6 @@ def main(page: ft.Page):
 
     reminders_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Text("مركز التنبيهات", size=24, weight=ft.FontWeight.BOLD), ft.IconButton(icon=ft.Icons.ADD_ALARM, bgcolor="teal", icon_color="white", on_click=lambda e: setattr(add_rem_dialog, 'open', True) or page.update())], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), filters_row, reminders_list], expand=True, scroll="hidden"))
 
-    # -- الإصلاح الذي قمنا به لتوافق الويب مع الخلفية (asyncio) --
     async def alarm_background_loop():
         while True:
             try:
