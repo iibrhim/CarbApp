@@ -1,7 +1,4 @@
 import flet as ft
-# هذا الاستدعاء ضروري جداً لتسجيل أداة الصور في الأندرويد
-import flet_file_picker
-
 from google import genai
 from google.genai import types
 import json
@@ -36,7 +33,6 @@ def set_storage(key, value):
         with open(STORAGE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
     except: pass
-
 
 client = genai.Client(api_key="AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg")
 
@@ -101,7 +97,7 @@ def main(page: ft.Page):
             except: pass
         return max(0.0, iob)
 
-    # --- 3. المنبه والتنبيهات الخلفية ---
+    # --- 3. المنبه والتنبيهات ---
     def dismiss_alarm(e):
         alarm_dialog.open = False
         page.update()
@@ -155,7 +151,8 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    file_picker = ft.FilePicker(on_result=on_file_picked)
+    file_picker = ft.FilePicker()
+    file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
 
     upload_zone = ft.Container(
