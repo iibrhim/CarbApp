@@ -98,7 +98,7 @@ def main(page: ft.Page):
             except: pass
         return max(0.0, iob)
 
-    # --- 3. المنبه والتنبيهات الخلفية (تمت إزالة الصوتيات تماماً لضمان الاستقرار) ---
+    # --- 3. المنبه والتنبيهات الخلفية ---
     def dismiss_alarm(e):
         alarm_dialog.open = False
         page.update()
@@ -152,6 +152,7 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
+    # تعريف أداة رفع الصور بشكل صريح ليراها خادم البناء
     file_picker = ft.FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
