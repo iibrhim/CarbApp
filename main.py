@@ -98,19 +98,15 @@ def main(page: ft.Page):
             except: pass
         return max(0.0, iob)
 
-    # --- 3. المنبه والتنبيهات الخلفية (استعادة الصوت) ---
-    alarm_audio = ft.Audio(src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg", autoplay=False)
-    page.overlay.append(alarm_audio)
-
+    # --- 3. المنبه والتنبيهات الخلفية (تمت إزالة الصوتيات تماماً لضمان الاستقرار) ---
     def dismiss_alarm(e):
-        alarm_audio.pause()
         alarm_dialog.open = False
         page.update()
 
     alarm_dialog = ft.AlertDialog(
         title=ft.Row([ft.Icon(ft.Icons.ALARM, color="red"), ft.Text("حان وقت التنبيه!", weight=ft.FontWeight.BOLD, color="red")]),
         content=ft.Text("", size=18, text_align="center", weight=ft.FontWeight.BOLD),
-        actions=[ft.ElevatedButton("إيقاف الرنين", on_click=dismiss_alarm, bgcolor="red", color="white", icon=ft.Icons.STOP_CIRCLE)],
+        actions=[ft.ElevatedButton("حسناً، تم", on_click=dismiss_alarm, bgcolor="red", color="white", icon=ft.Icons.CHECK_CIRCLE)],
         shape=ft.RoundedRectangleBorder(radius=20), modal=True
     )
     page.overlay.append(alarm_dialog)
@@ -126,7 +122,7 @@ def main(page: ft.Page):
         )
 
     # ========================================================
-    # --- 5. قسم الحاسبة الذكية (استعادة معرض الصور بالكامل) ---
+    # --- 5. قسم الحاسبة الذكية والصور ---
     # ========================================================
     selected_images_paths = []
     images_row = ft.Row(wrap=True, spacing=10, alignment=ft.MainAxisAlignment.CENTER)
@@ -156,7 +152,6 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    # كتابة ft.FilePicker بالصيغة الرسمية ليقوم مترجم الأندرويد بدمج معرض الصور تلقائياً
     file_picker = ft.FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
@@ -443,8 +438,7 @@ def main(page: ft.Page):
                         notif_now_key = f"notified_now_{target_time}_{current_date}" if is_daily else f"notified_now_{target_time}"
                         if target_time == cmp_current and item.get("last_now") != notif_now_key:
                             item["last_now"] = notif_now_key; needs_save = True
-                            alarm_dialog.content.value = item['title']; alarm_dialog.open = True
-                            alarm_audio.play(); page.update()
+                            alarm_dialog.content.value = item['title']; alarm_dialog.open = True; page.update()
 
                         if item.get("day_before") and not is_daily:
                             try:
