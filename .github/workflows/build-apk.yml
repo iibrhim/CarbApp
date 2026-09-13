@@ -12,7 +12,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies (Fix Flutter Doctor)
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev mesa-utils
@@ -28,13 +28,14 @@ jobs:
           pip install flet google-genai
 
       - name: Prepare Flet Build Config
+        # تم إزالة flet-file-picker من قائمة dependencies لكي لا ينهار البناء
         run: |
           cat << EOF > pyproject.toml
           [project]
           name = "carbapp"
           version = "1.0.0"
           description = "Smart Diabetes Management System"
-          dependencies = ["flet", "flet-file-picker", "google-genai"]
+          dependencies = ["flet", "google-genai"]
           [tool.flet.app]
           module = "main"
           EOF
@@ -51,11 +52,11 @@ jobs:
           channel: 'stable'
 
       - name: Accept Android Licenses
-        # هذا السطر السحري سيوافق على جميع شروط جوجل للأندرويد آلياً
         run: yes | flutter doctor --android-licenses
 
       - name: Build Android APK
-        run: echo "y" | flet build apk
+        # بيئة البناء الآن نظيفة ولن تسأل عن شيء، لذلك نستخدم أمر البناء المباشر
+        run: flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
