@@ -4,7 +4,8 @@ version = "1.0.0"
 description = "Smart Diabetes Management System"
 dependencies = [
     "flet",
-    "requests"
+    "flet-file-picker",
+    "google-genai",
 ]
 
 [tool.flet]
