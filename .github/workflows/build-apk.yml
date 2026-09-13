@@ -12,6 +12,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install System Dependencies (Fix Flutter Doctor)
+        # تثبيت المكتبات الناقصة التي طلبها الخادم لكي لا ينهار
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev mesa-utils
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -46,8 +52,8 @@ jobs:
           channel: 'stable'
 
       - name: Build Android APK
-        # هنا أضفنا yes | للإجابة بنعم تلقائياً على سؤال تثبيت Flutter
-        run: yes | flet build apk
+        # استخدام echo بدلاً من yes لتجنب خطأ Broken pipe
+        run: echo "y" | flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
