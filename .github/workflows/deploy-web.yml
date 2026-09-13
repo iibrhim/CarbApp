@@ -35,8 +35,8 @@ jobs:
           pip install flet google-genai
 
       - name: Build Custom Web App (Includes FilePicker)
-        # هذا هو الأمر السحري الذي سيبني التطبيق مع معرض الصور
-        run: flet build web --base-url /CarbApp/
+        # تمت إضافة yes | للإجابة بـ "نعم" آلياً على سؤال التثبيت
+        run: yes | flet build web --base-url /CarbApp/
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
@@ -44,7 +44,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # تم تغيير مسار الرفع ليتوافق مع مجلد البناء الجديد
           path: 'build/web'
 
       - name: Deploy to GitHub Pages
