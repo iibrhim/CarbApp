@@ -4,35 +4,34 @@ from google.genai import types
 import json
 import datetime
 import asyncio
+import base64
 import os
 
 API_KEY = "AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg"
 
 # ========================================================
-# --- محرك التخزين المحلي للأندرويد ---
+# --- محرك التخزين الهجين (مستقر جداً للموبايل) ---
 # ========================================================
-STORAGE_FILE = os.path.join(os.environ.get("HOME", os.getcwd()), "carbapp_storage.json")
+fallback_db = {}
 
 def get_storage(key, default=None):
     try:
-        if os.path.exists(STORAGE_FILE):
-            with open(STORAGE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get(key, default)
+        if hasattr(page, "client_storage") and page.client_storage is not None:
+            val = page.client_storage.get(key)
+            if val is not None: return val
+        if hasattr(page, "session") and page.session is not None:
+            val = page.session.get(key)
+            if val is not None: return val
     except: pass
-    return default
+    return fallback_db.get(key, default)
 
 def set_storage(key, value):
-    data = {}
+    fallback_db[key] = value
     try:
-        if os.path.exists(STORAGE_FILE):
-            with open(STORAGE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-    except: pass
-    data[key] = value
-    try:
-        with open(STORAGE_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
+        if hasattr(page, "client_storage") and page.client_storage is not None:
+            page.client_storage.set(key, value)
+        if hasattr(page, "session") and page.session is not None:
+            page.session.set(key, value)
     except: pass
 
 client = genai.Client(api_key=API_KEY)
@@ -69,7 +68,7 @@ def main(page: ft.Page):
 
     # --- 2. إدارة السجل والأنسولين النشط ---
     def load_history():
-        return get_storage("user_history", [])
+        return get_storage("user_history") or []
 
     def save_history(data):
         set_storage("user_history", data)
@@ -154,7 +153,8 @@ def main(page: ft.Page):
                 selected_images_paths.append(f.path)
             update_images_ui()
 
-    file_picker = ft.FilePicker(on_result=on_file_picked)
+    file_picker = ft.FilePicker()
+    file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
 
     upload_zone = ft.Container(
@@ -181,6 +181,7 @@ def main(page: ft.Page):
             
             parts = [prompt_text]
             
+            # قراءة الصور الفعلية من جهاز الأندرويد وإرفاقها للذكاء الاصطناعي
             for path in selected_images_paths:
                 if path:
                     try:
@@ -364,7 +365,7 @@ def main(page: ft.Page):
     time_picker_2 = ft.TimePicker(on_change=on_time2_picked)
     page.overlay.extend([date_picker_1, time_picker_1, time_picker_2])
 
-    def load_rems(): return get_storage("user_rems", [])
+    def load_rems(): return get_storage("user_rems") or []
     def save_rems(data): set_storage("user_rems", data)
     
     def delete_rem(rem_id): 
