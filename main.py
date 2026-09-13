@@ -1,4 +1,5 @@
 import flet as ft
+from flet_file_picker import FilePicker  # الاستدعاء الرسمي للمكتبة المستقلة
 from google import genai
 from google.genai import types
 import json
@@ -145,14 +146,14 @@ def main(page: ft.Page):
             images_row.controls.append(ft.Image(src=path, width=70, height=70, fit=ft.ImageFit.COVER, border_radius=10))
         page.update()
 
-    def on_file_picked(e: ft.FilePickerResultEvent):
+    def on_file_picked(e):
         if e.files:
             selected_images_paths.clear()
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    # استخدام ft.FilePicker صراحة ليقرأها محرك البناء ويدمج معرض الصور
-    file_picker = ft.FilePicker()
+    # استخدام الكلاس الرسمي للمكتبة المستقلة
+    file_picker = FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
 
