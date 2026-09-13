@@ -35,7 +35,7 @@ jobs:
         with:
           flutter-version: '3.22.x'
           channel: 'stable'
-          cache: true
+          # تم إزالة سطر الكاش من هنا لكسر الذاكرة القديمة وبناء نواة جديدة نظيفة
 
       - name: Build APK
         run: flet build apk --yes
