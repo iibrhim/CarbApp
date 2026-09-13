@@ -24,22 +24,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet
 
-      - name: Create requirements.txt
-        run: |
-          echo "flet" > requirements.txt
-          echo "google-genai" >> requirements.txt
-
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.x'
-          channel: 'stable'
 
       - name: Build APK
         run: flet build apk --yes
