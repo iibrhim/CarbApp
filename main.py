@@ -3,7 +3,7 @@ from google import genai
 from google.genai import types
 import json
 import datetime
-import asyncio  # تم استبدال threading و time بهذه المكتبة المدعومة في الويب
+import asyncio
 import os
 
 # ========================================================
@@ -150,7 +150,9 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    file_picker = ft.FilePicker(on_result=on_file_picked)
+    # -- الإصلاح المزدوج: فصل السطرين كما فعلنا سابقاً لتجنب خطأ الـ keyword argument --
+    file_picker = ft.FilePicker()
+    file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
 
     upload_zone = ft.Container(
@@ -410,7 +412,7 @@ def main(page: ft.Page):
 
     reminders_view = ft.Container(padding=20, content=ft.Column([ft.Row([ft.Text("مركز التنبيهات", size=24, weight=ft.FontWeight.BOLD), ft.IconButton(icon=ft.Icons.ADD_ALARM, bgcolor="teal", icon_color="white", on_click=lambda e: setattr(add_rem_dialog, 'open', True) or page.update())], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), filters_row, reminders_list], expand=True, scroll="hidden"))
 
-    # تم تحويل هذه الدالة لتعمل بتزامن (async) لتتوافق مع الويب بدلاً من الخيوط
+    # -- الإصلاح الذي قمنا به لتوافق الويب مع الخلفية (asyncio) --
     async def alarm_background_loop():
         while True:
             try:
@@ -450,7 +452,6 @@ def main(page: ft.Page):
             except: pass
             await asyncio.sleep(20)
 
-    # تشغيل المهمة بشكل آمن عبر محرك Flet
     page.run_task(alarm_background_loop)
 
     # --- 7. قسم المؤشرات الصحية ---
