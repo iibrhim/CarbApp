@@ -151,8 +151,9 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    # استخدام الأداة القياسية الخاصة بالويب
-    file_picker = ft.FilePicker(on_result=on_file_picked)
+    # التعديل هنا: فصل السطرين ليتقبله المتصفح بسلاسة
+    file_picker = ft.FilePicker()
+    file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
 
     upload_zone = ft.Container(
