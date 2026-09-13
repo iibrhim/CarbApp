@@ -151,6 +151,7 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
+    # استخدام ft.FilePicker صراحة ليقرأها محرك البناء ويدمج معرض الصور
     file_picker = ft.FilePicker()
     file_picker.on_result = on_file_picked
     page.overlay.append(file_picker)
