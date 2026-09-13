@@ -1,4 +1,7 @@
 import flet as ft
+# هذا الاستدعاء ضروري جداً لتسجيل أداة الصور في الأندرويد
+import flet_file_picker
+
 from google import genai
 from google.genai import types
 import json
@@ -152,9 +155,7 @@ def main(page: ft.Page):
             for f in e.files: selected_images_paths.append(f.path)
             update_images_ui()
 
-    # تعريف أداة رفع الصور بشكل صريح ليراها خادم البناء
-    file_picker = ft.FilePicker()
-    file_picker.on_result = on_file_picked
+    file_picker = ft.FilePicker(on_result=on_file_picked)
     page.overlay.append(file_picker)
 
     upload_zone = ft.Container(
