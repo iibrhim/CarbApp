@@ -19,17 +19,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies in Runner
+      - name: Install Flet CLI and Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flet flet-file-picker google-genai
-
-      - name: Create requirements.txt for APK bundling
-        # هذا هو السطر السحري الذي سيجبر الخادم على وضع المكاتب داخل التطبيق
-        run: |
-          echo "flet" > requirements.txt
-          echo "flet-file-picker" >> requirements.txt
-          echo "google-genai" >> requirements.txt
+          pip install flet google-genai
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -43,8 +36,8 @@ jobs:
           flutter-version: '3.22.x'
           channel: 'stable'
 
-      - name: Build APK
-        run: flet build apk --yes
+      - name: Build APK (إجبار دمج معرض الصور)
+        run: flet build apk --include-packages flet_file_picker --yes
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
