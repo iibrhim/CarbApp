@@ -55,12 +55,15 @@ jobs:
           channel: 'stable'
 
       - name: Accept Android Licenses
-        # إضافة || true لمنع توقف الخادم إذا كانت التراخيص مقبولة مسبقاً
-        run: yes | flutter doctor --android-licenses || true
+        run: |
+          set +o pipefail
+          yes | flutter doctor --android-licenses || true
 
       - name: Build Android APK
-        # أعدنا الإجابة التلقائية "y" لمنع الخادم من التعليق والانتظار
-        run: echo "y" | flet build apk
+        # أضفنا حماية الأنبوب (pipefail) لمنع أي انهيار بعد إجابة الأسئلة
+        run: |
+          set +o pipefail
+          yes | flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
