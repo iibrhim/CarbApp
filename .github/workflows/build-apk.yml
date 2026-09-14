@@ -23,20 +23,18 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python Packages
-        # تم تصحيح الخطأ: إزالة flet-file-picker من هنا لأنه لا يحمل من الإنترنت
         run: |
           python -m pip install --upgrade pip
           pip install flet google-genai
 
       - name: Prepare Flet Build Config & Android Permissions
-        # احتفظنا بها هنا فقط لأن هذا هو مكانها الصحيح لدمج الكاميرا
         run: |
           cat << EOF > pyproject.toml
           [project]
           name = "carbapp"
           version = "1.0.0"
           description = "Smart Diabetes Management System"
-          dependencies = ["flet", "flet-file-picker", "google-genai"]
+          dependencies = ["flet", "google-genai"]
           
           [tool.flet.app]
           module = "main"
@@ -51,13 +49,13 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Set up Flutter (Exact Version)
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.3'
-
       - name: Build Android APK
-        run: flet build apk
+        # إيقاف عمل Gradle في الخلفية لمنع التعليق
+        env:
+          ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
+        # خدعة الـ 10 إجابات: إرسال "نعم" 10 مرات فقط لتخطي الأسئلة بدون خنق المحرك
+        run: |
+          python -c "print('y\n' * 10)" | flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
