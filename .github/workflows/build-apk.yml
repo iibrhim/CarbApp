@@ -23,18 +23,20 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python Packages
+        # استخدام أحدث إصدارات لضمان التوافق مع الكاميرا
         run: |
           python -m pip install --upgrade pip
-          pip install flet==0.23.2 google-genai
+          pip install flet flet-file-picker google-genai
 
       - name: Prepare Flet Build Config & Android Permissions
+        # تضمين مكتبة الصور وحقن صلاحيات الكاميرا والاستوديو
         run: |
           cat << EOF > pyproject.toml
           [project]
           name = "carbapp"
           version = "1.0.0"
           description = "Smart Diabetes Management System"
-          dependencies = ["flet==0.23.2", "google-genai"]
+          dependencies = ["flet", "flet-file-picker", "google-genai"]
           
           [tool.flet.app]
           module = "main"
@@ -49,21 +51,15 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Set up Flutter (Exact Version)
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
-
-      - name: Accept Android Licenses
-        run: |
-          set +o pipefail
-          yes | flutter doctor --android-licenses || true
+          # تثبيت الإصدار الذي يطلبه Flet حرفياً لمنع أي أسئلة تفاعلية أو تعليق
+          flutter-version: '3.24.3'
 
       - name: Build Android APK
-        # أضفنا حماية الأنبوب (pipefail) لمنع أي انهيار بعد إجابة الأسئلة
-        run: |
-          set +o pipefail
-          yes | flet build apk
+        # أمر البناء النظيف والمباشر بدون أي ترقيع
+        run: flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
