@@ -23,6 +23,12 @@ jobs:
         with:
           flutter-version: '3.19.6'
 
+      - name: Disable Flutter Analytics & Accept Licenses
+        # الضربة القاضية: إغلاق أسئلة Flutter التحليلية والموافقة على التراخيص مسبقاً
+        run: |
+          flutter config --no-analytics
+          yes | flutter doctor --android-licenses || true
+
       - name: Install System Dependencies
         run: |
           sudo apt-get update
@@ -36,7 +42,6 @@ jobs:
       - name: Install Python Packages
         run: |
           python -m pip install --upgrade pip
-          # استخدام الإصدار الذهبي الذي يدمج الكاميرا أصلياً
           pip install flet==0.22.1 google-genai
 
       - name: Prepare Flet Build Config & Android Permissions
@@ -55,12 +60,9 @@ jobs:
           permissions = ["camera", "read_external_storage", "write_external_storage", "read_media_images"]
           EOF
 
-      - name: Accept Android Licenses
-        run: yes | flutter doctor --android-licenses || true
-
       - name: Build Android APK
-        # حقنة الـ 5 موافقات: تجيب على الأسئلة وتغلق الأنبوب قبل أن يختنق الأندرويد!
-        run: yes y | head -n 5 | flet build apk
+        # بناء طبيعي ومباشر بدون أي أنابيب لتجنب اختناق الخادم
+        run: flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
