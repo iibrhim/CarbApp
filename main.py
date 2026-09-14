@@ -10,7 +10,7 @@ API_KEY = "AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg"
 client = genai.Client(api_key=API_KEY)
 
 # ========================================================
-# --- محرك التخزين الهجين (تم إصلاحه ليدعم ذاكرة الهاتف الدائمة) ---
+# --- محرك التخزين الهجين (يدعم ذاكرة الهاتف الدائمة) ---
 # ========================================================
 fallback_db = {}
 
@@ -147,9 +147,10 @@ def main(page: ft.Page):
                     selected_images_paths.append(f.path)
             update_images_ui()
 
-    # الترقية الحديثة: تسجيل الكاميرا كخدمة (Service) لإزالة الشريط الأحمر
-    file_picker = ft.FilePicker(on_result=on_file_picked)
-    page.services.append(file_picker)
+    # التعديل هنا: تعريف الأداة بالطريقة الكلاسيكية التي يقبلها المحرك
+    file_picker = ft.FilePicker()
+    file_picker.on_result = on_file_picked
+    page.overlay.append(file_picker)
 
     upload_zone = ft.Container(
         content=ft.Column([
@@ -160,7 +161,6 @@ def main(page: ft.Page):
         padding=ft.Padding(left=20, right=20, top=20, bottom=20),
         border=ft.Border(top=ft.BorderSide(width=2, color="teal"), bottom=ft.BorderSide(width=2, color="teal"), left=ft.BorderSide(width=2, color="teal"), right=ft.BorderSide(width=2, color="teal")),
         border_radius=20,
-        # إضافة تصنيف IMAGE لإجبار الأندرويد على إظهار أيقونة الكاميرا
         ink=True, on_click=lambda _: file_picker.pick_files(allow_multiple=True, file_type=ft.FilePickerFileType.IMAGE)
     )
 
@@ -183,7 +183,7 @@ def main(page: ft.Page):
                             parts.append(types.Part.from_bytes(data=image_file.read(), mime_type='image/jpeg'))
                     except: pass
             
-            response = client.models.generate_content(model='gemini-3.6-flash', contents=parts)
+            response = client.models.generate_content(model='gemini-1.5-flash', contents=parts)
             raw_text = response.text.strip()
             
             if raw_text.startswith("```json"): raw_text = raw_text[7:-3]
