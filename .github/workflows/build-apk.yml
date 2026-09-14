@@ -27,17 +27,41 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet google-genai
 
+      - name: Prepare Flet Build Config & Android Permissions
+        run: |
+          cat << EOF > pyproject.toml
+          [project]
+          name = "carbapp"
+          version = "1.0.0"
+          description = "Smart Diabetes Management System"
+          dependencies = ["flet", "google-genai"]
+          
+          [tool.flet.app]
+          module = "main"
+          
+          [tool.flet.app.android]
+          # حقن الصلاحيات الرسمية في قلب الأندرويد
+          permissions = ["camera", "read_external_storage", "write_external_storage", "read_media_images"]
+          EOF
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.3'
+          channel: 'stable'
+
+      - name: Accept Android Licenses
+        run: yes | flutter doctor --android-licenses || true
+
       - name: Build Android APK
-        env:
-          ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
-        run: |
-          python -c "print('y\n' * 10)" | flet build apk
+        # الضربة القاضية: إجبار الخادم على دمج أداة الكاميرا ومعرض الصور
+        run: flet build apk --include-packages flet_file_picker
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
