@@ -23,13 +23,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python Packages
-        # استخدام أحدث إصدارات لضمان التوافق مع الكاميرا
+        # تم تصحيح الخطأ: إزالة flet-file-picker من هنا لأنه لا يحمل من الإنترنت
         run: |
           python -m pip install --upgrade pip
-          pip install flet flet-file-picker google-genai
+          pip install flet google-genai
 
       - name: Prepare Flet Build Config & Android Permissions
-        # تضمين مكتبة الصور وحقن صلاحيات الكاميرا والاستوديو
+        # احتفظنا بها هنا فقط لأن هذا هو مكانها الصحيح لدمج الكاميرا
         run: |
           cat << EOF > pyproject.toml
           [project]
@@ -54,11 +54,9 @@ jobs:
       - name: Set up Flutter (Exact Version)
         uses: subosito/flutter-action@v2
         with:
-          # تثبيت الإصدار الذي يطلبه Flet حرفياً لمنع أي أسئلة تفاعلية أو تعليق
           flutter-version: '3.24.3'
 
       - name: Build Android APK
-        # أمر البناء النظيف والمباشر بدون أي ترقيع
         run: flet build apk
 
       - name: Upload APK
