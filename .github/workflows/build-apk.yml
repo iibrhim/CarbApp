@@ -12,6 +12,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Java 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '11'
+
+      - name: Set up Flutter
+        # أعدنا هذه الخطوة الضرورية لكي يتعرف الخادم على أوامر Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.6'
+          channel: 'stable'
+
+      - name: Disable Analytics and Accept Licenses
+        # نغلق تحليلات جوجل ونوافق على التراخيص مسبقاً لمنع الخادم من طرح أي أسئلة
+        run: |
+          flutter config --no-analytics
+          yes | flutter doctor --android-licenses || true
+
       - name: Install System Dependencies
         run: |
           sudo apt-get update
@@ -43,19 +62,11 @@ jobs:
           permissions = ["camera", "read_external_storage", "write_external_storage", "read_media_images"]
           EOF
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
       - name: Build Android APK
-        # 1. إيقاف عمل Gradle في الخلفية لمنعه من التعليق
-        # 2. إرسال 10 موافقات لتخطي أي أسئلة خفية من Flet فوراً
+        # بناء طبيعي ومباشر تماماً، بلا تعليق وبلا أخطاء مسارات
         env:
           ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
-        run: |
-          python -c "print('y\n' * 10)" | flet build apk
+        run: flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
