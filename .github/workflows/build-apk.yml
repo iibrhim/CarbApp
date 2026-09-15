@@ -12,22 +12,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 17 (أقوى بيئة أندرويد)
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
-
-      - name: Set up Flutter 3.24.3 (الإصدار الأحدث المتوافق مع المحرك الجديد)
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.3'
-          channel: 'stable'
-
-      - name: Disable Analytics and Accept Licenses
-        run: |
-          flutter config --no-analytics
-          yes | flutter doctor --android-licenses || true
 
       - name: Install System Dependencies
         run: |
@@ -40,10 +29,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python Packages
-        # العودة للإصدار الأحدث من Flet للقضاء على الشاشة البيضاء نهائياً
         run: |
           python -m pip install --upgrade pip
-          pip install flet
+          pip install flet flet-file-picker
 
       - name: Prepare Flet Build Config & Android Permissions
         run: |
@@ -52,14 +40,12 @@ jobs:
           name = "carbapp"
           version = "1.0.0"
           description = "Smart Diabetes Management System"
-          # السر هنا: إضافة flet-file-picker للقضاء على الشريط الأحمر في الإصدارات الحديثة
           dependencies = ["flet", "flet-file-picker"]
           
           [tool.flet.app]
           module = "main"
           
           [tool.flet.app.android]
-          # صلاحيات كاملة تشمل الإنترنت للكاميرا والذكاء الاصطناعي
           permissions = ["camera", "read_external_storage", "write_external_storage", "read_media_images", "internet"]
           EOF
 
@@ -67,8 +53,8 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
           CI: "true"
-        # بناء مباشر وصامت لا يعلق
-        run: flet build apk -vv < /dev/null
+        # إرسال "نعم" لإجابة المحرك والسماح له بالتحميل دون أن يعلق الخادم
+        run: echo "y" | flet build apk -vv
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
