@@ -40,8 +40,8 @@ jobs:
           name = "carbapp"
           version = "1.0.0"
           description = "Smart Diabetes Management System"
-          # السر النهائي: ترك القائمة فارغة ليضع المحرك نسخة الجوال الخفيفة تلقائياً
-          dependencies = []
+          # إعادة flet ليتمكن التطبيق من قراءة أمر التشغيل app
+          dependencies = ["flet"]
           
           [tool.flet.app]
           module = "main"
@@ -53,9 +53,10 @@ jobs:
       - name: Build Android APK
         env:
           ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
+        # السر هنا: إضافة أمر دمج الكاميرا بشكل أصلي ليختفي الشريط الأحمر للأبد
         run: |
           set +o pipefail
-          yes | flet build apk -vv
+          yes | flet build apk --include-packages flet_file_picker -vv
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
