@@ -12,21 +12,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. تثبيت Java 17 وتعيين متغير البيئة JAVA_HOME
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-        # هذا السطر هو المفتاح: يضمن أن جميع الخطوات التالية ستستخدم Java 17
-        # حتى لو كانت هناك نسخ Java أخرى مثبتة على النظام.
-          
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          # هذا الخيار يتجاوز cmdline-tools الموجود مسبقاً ويجبر الأداة على تثبيت نسخة جديدة.
-          # سيتم استخدام النسخة الجديدة التي ستستعمل Java 17 بشكل صحيح.
           cmdline-tools-version: 'latest'
+          packages: ''   # 跳过安装默认的 'tools' 包，解决 "Failed to find package 'tools'" 错误
 
       - name: Set up Flutter 3.19.6
         uses: subosito/flutter-action@v2
@@ -85,7 +81,6 @@ jobs:
       - name: Build Android APK
         env:
           CI: "true"
-          # التأكد من أن Gradle يستخدم Java 17 أيضاً
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.parallel=true"
         run: flet build apk -vv
 
