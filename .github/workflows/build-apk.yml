@@ -21,6 +21,8 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          # السر هنا: تخفيض Flutter ليتوافق مع محرك Flet القديم لتفادي تعارض Kotlin
+          flutter-version: '3.16.9'
           channel: 'stable'
 
       - name: Disable Analytics and Accept Licenses
@@ -39,13 +41,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python Packages
-        # تم إزالة المكتبة الثقيلة google-genai بالكامل لإنقاذ الخادم
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.22.1
 
       - name: Prepare Flet Build Config & Android Permissions
-        # التطبيق الآن نظيف 100% ولا يحتوي إلا على مكتبة الواجهة الأساسية
         run: |
           cat << EOF > pyproject.toml
           [project]
@@ -65,7 +65,7 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
           CI: "true"
-        run: flet build apk
+        run: flet build apk -vv
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
