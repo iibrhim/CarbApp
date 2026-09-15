@@ -1,0 +1,34 @@
+[project]
+name = "carbapp"
+version = "1.0.0"
+description = "Smart Diabetes Management System"
+dependencies = [
+    "flet==0.85.3"
+]
+
+[tool.flet]
+org = "com.ibrahim.carbapp"
+product = "حاسبة الكارب الذكية"
+
+[tool.flet.app]
+module = "main"
+
+[tool.flet.app.boot_screen]
+show = true
+message = "جاري تحضير التطبيق..."
+
+[tool.flet.app.startup_screen]
+show = true
+message = "جاري تجهيز كل شيء..."
+
+# ✅ الهيكل الجديد للأذونات (إلزامي في الإصدارات الحديثة)
+[tool.flet.android.permission]
+"android.permission.CAMERA" = true
+"android.permission.READ_EXTERNAL_STORAGE" = true
+"android.permission.WRITE_EXTERNAL_STORAGE" = true
+"android.permission.READ_MEDIA_IMAGES" = true
+"android.permission.INTERNET" = true
+"android.permission.POST_NOTIFICATIONS" = true
+"android.permission.SCHEDULE_EXACT_ALARM" = true
+"android.permission.USE_EXACT_ALARM" = true
+"android.permission.VIBRATE" = true
