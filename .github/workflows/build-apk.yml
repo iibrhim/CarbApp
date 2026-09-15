@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,8 +25,11 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
 
-      - name: Disable Analytics
-        run: flutter config --no-analytics
+      - name: Flutter doctor & dependencies
+        run: |
+          flutter --version
+          flutter doctor -v
+          flutter config --no-analytics
 
       - name: Install System Dependencies
         run: |
@@ -40,33 +44,42 @@ jobs:
       - name: Install Python Packages
         run: |
           python -m pip install --upgrade pip
-          pip install flet==0.22.1
+          pip install "flet==0.22.1"
 
-      - name: Prepare Flet Build Config & Android Permissions
+          # لو عندك google-genai في pyproject، هذا يضمن التثبيت
+          # (لن يضر حتى لو كان موجود)
+          if [ -f pyproject.toml ]; then
+            pip install "google-genai"
+          fi
+
+      # (اختياري لكن موصى به) تمرير API key كـ secret بدل وضعه داخل main.py
+      # ملاحظة: هذا يتطلب تعديل main.py ليستخدم env var بدل الثابت داخل الملف.
+      - name: Export secrets (optional)
+        if: ${{ secrets.GOOGLE_GENAI_API_KEY != '' }}
         run: |
-          cat << EOF > pyproject.toml
-          [project]
-          name = "carbapp"
-          version = "1.0.0"
-          description = "Smart Diabetes Management System"
-          dependencies = ["flet==0.22.1"]
-          
-          [tool.flet.app]
-          module = "main"
-          
-          [tool.flet.app.android]
-          permissions = ["camera", "read_external_storage", "write_external_storage", "read_media_images", "internet"]
-          EOF
+          echo "GOOGLE_GENAI_API_KEY=${{ secrets.GOOGLE_GENAI_API_KEY }}" >> $GITHUB_ENV
 
       - name: Build Android APK
         env:
           ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
           CI: "true"
-        # تشغيل البناء بشكل مباشر وآمن بدون أي أنابيب تسبب Broken pipe
-        run: flet build apk -vv
+        run: |
+          # تشخيص بسيط
+          python -V
+          ls -la
+
+          # بناء APK
+          flet build apk -vv
+
+          # التأكد من مكان ملفات APK
+          echo "APK files found:"
+          find . -type f -name "*.apk" -maxdepth 6 || true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: diabetes-app-apk
-          path: build/apk/*.apk
+          path: |
+            build/apk/**/*.apk
+            **/build/apk/**/*.apk
+            **/*.apk
