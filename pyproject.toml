@@ -3,19 +3,17 @@ name = "carbapp"
 version = "1.0.0"
 description = "Smart Diabetes Management System"
 dependencies = [
-    "flet==0.22.1"
+    "flet==0.21.2"
 ]
 
 [tool.flet]
 org = "com.ibrahim.carbapp"
 product = "حاسبة الكارب الذكية"
-# ✅ تحديد إصدار Python المتوافق مع Flet 0.22.1
 python_version = "3.11"
 
 [tool.flet.app]
 module = "main"
 
-# ✅ شاشة تمهيدية لتجنب الشاشة البيضاء أثناء التحميل
 [tool.flet.app.boot_screen]
 show = true
 message = "جاري تحضير التطبيق..."
@@ -24,7 +22,6 @@ message = "جاري تحضير التطبيق..."
 show = true
 message = "جاري تجهيز كل شيء..."
 
-# ✅ الأذونات الصحيحة
 [tool.flet.android]
 permissions = [
     "camera",
@@ -38,6 +35,5 @@ permissions = [
     "vibrate"
 ]
 
-# ✅ إعدادات إضافية للاتصال بالإنترنت
 [tool.flet.android.manifest_application]
 usesCleartextTraffic = "true"
