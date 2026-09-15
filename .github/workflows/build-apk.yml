@@ -88,7 +88,8 @@ jobs:
         env:
           CI: "true"
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.parallel=true"
-        run: flet build apk -vv
+          FLET_CLI_NO_RICH_OUTPUT: "true"
+        run: flet build apk --verbose --yes
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
