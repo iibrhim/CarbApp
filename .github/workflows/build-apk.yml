@@ -12,17 +12,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up Java 11 (البيئة الذهبية المستقرة لهذا الإصدار)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '11'
 
-      - name: Set up Flutter
+      - name: Set up Flutter 3.19.6 (الإصدار الإجباري لمحرك Flet)
         uses: subosito/flutter-action@v2
         with:
-          # السر هنا: تخفيض Flutter ليتوافق مع محرك Flet القديم لتفادي تعارض Kotlin
-          flutter-version: '3.16.9'
+          flutter-version: '3.19.6'
           channel: 'stable'
 
       - name: Disable Analytics and Accept Licenses
@@ -64,8 +63,10 @@ jobs:
       - name: Build Android APK
         env:
           ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
+          # إعلام المحرك أنه يعمل في خادم لمنعه من الأسئلة الخفية
           CI: "true"
-        run: flet build apk -vv
+        # قطع لوحة المفاتيح (/dev/null) لضمان عدم التعليق نهائياً
+        run: flet build apk < /dev/null
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
