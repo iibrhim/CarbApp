@@ -12,11 +12,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up Java 11 (البيئة الذهبية المستقرة)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '11'
+
+      - name: Set up Flutter 3.19.6
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.6'
+          channel: 'stable'
+
+      - name: Disable Analytics and Accept Licenses
+        run: |
+          flutter config --no-analytics
+          yes | flutter doctor --android-licenses || true
 
       - name: Install System Dependencies
         run: |
@@ -31,7 +42,8 @@ jobs:
       - name: Install Python Packages
         run: |
           python -m pip install --upgrade pip
-          pip install flet
+          # تثبيت النسخة المستقرة التي تتضمن الكاميرا بشكل افتراضي
+          pip install flet==0.22.1
 
       - name: Prepare Flet Build Config & Android Permissions
         run: |
@@ -40,8 +52,8 @@ jobs:
           name = "carbapp"
           version = "1.0.0"
           description = "Smart Diabetes Management System"
-          # إعادة flet ليتمكن التطبيق من قراءة أمر التشغيل app
-          dependencies = ["flet"]
+          # إعادة مكتبة flet هنا لكي لا تظهر الشاشة الحمراء في الجوال
+          dependencies = ["flet==0.22.1"]
           
           [tool.flet.app]
           module = "main"
@@ -53,10 +65,11 @@ jobs:
       - name: Build Android APK
         env:
           ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
-        # السر هنا: إضافة أمر دمج الكاميرا بشكل أصلي ليختفي الشريط الأحمر للأبد
+          CI: "true"
+        # بناء نظيف تماماً بدون أوامر زائدة تسبب انهيار الخادم
         run: |
           set +o pipefail
-          yes | flet build apk --include-packages flet_file_picker -vv
+          yes | flet build apk -vv
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
