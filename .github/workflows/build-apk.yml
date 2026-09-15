@@ -12,13 +12,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 11 (البيئة الذهبية المستقرة لهذا الإصدار)
+      - name: Set up Java 17 (النسخة الإجبارية التي يطلبها المحرك الحديث)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '11'
+          java-version: '17'
 
-      - name: Set up Flutter 3.19.6 (الإصدار الإجباري لمحرك Flet)
+      - name: Set up Flutter 3.19.6
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.19.6'
@@ -63,10 +63,9 @@ jobs:
       - name: Build Android APK
         env:
           ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
-          # إعلام المحرك أنه يعمل في خادم لمنعه من الأسئلة الخفية
           CI: "true"
-        # قطع لوحة المفاتيح (/dev/null) لضمان عدم التعليق نهائياً
-        run: flet build apk < /dev/null
+        # إضافة -vv لرؤية تقدم البناء ولتجنب أي صمت من الخادم
+        run: flet build apk -vv
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
