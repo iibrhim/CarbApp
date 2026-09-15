@@ -1,0 +1,98 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 'latest'
+          packages: ''
+
+      - name: Set up Flutter 3.29.0
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+
+      - name: Disable Analytics
+        run: flutter config --no-analytics
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev mesa-utils
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python Packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install flet==0.85.3
+
+      - name: Prepare Flet Build Config & Android Permissions
+        run: |
+          cat << 'EOF' > pyproject.toml
+          [project]
+          name = "carbapp"
+          version = "1.0.0"
+          description = "Smart Diabetes Management System"
+          dependencies = ["flet==0.85.3"]
+
+          [tool.flet]
+          org = "com.ibrahim.carbapp"
+          product = "حاسبة الكارب الذكية"
+
+          [tool.flet.app]
+          module = "main"
+
+          [tool.flet.app.boot_screen]
+          show = true
+          message = "جاري تحضير التطبيق..."
+
+          [tool.flet.app.startup_screen]
+          show = true
+          message = "جاري تجهيز كل شيء..."
+
+          [tool.flet.android.permission]
+          "android.permission.CAMERA" = true
+          "android.permission.READ_EXTERNAL_STORAGE" = true
+          "android.permission.WRITE_EXTERNAL_STORAGE" = true
+          "android.permission.READ_MEDIA_IMAGES" = true
+          "android.permission.INTERNET" = true
+          "android.permission.POST_NOTIFICATIONS" = true
+          "android.permission.SCHEDULE_EXACT_ALARM" = true
+          "android.permission.USE_EXACT_ALARM" = true
+          "android.permission.VIBRATE" = true
+          EOF
+
+      - name: Build Android APK
+        env:
+          CI: "true"
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.parallel=true"
+        run: flet build apk -vv
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: diabetes-app-apk
+          path: build/apk/*.apk
+          if-no-files-found: error
