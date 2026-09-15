@@ -29,18 +29,20 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python Packages
+        # تم إزالة الحزمة الوهمية نهائياً من هنا!
         run: |
           python -m pip install --upgrade pip
-          pip install flet flet-file-picker
+          pip install flet
 
       - name: Prepare Flet Build Config & Android Permissions
+        # تم إزالة الحزمة الوهمية من الاعتمادات، مع إبقاء صلاحيات الكاميرا والإنترنت
         run: |
           cat << EOF > pyproject.toml
           [project]
           name = "carbapp"
           version = "1.0.0"
           description = "Smart Diabetes Management System"
-          dependencies = ["flet", "flet-file-picker"]
+          dependencies = ["flet"]
           
           [tool.flet.app]
           module = "main"
@@ -52,7 +54,7 @@ jobs:
       - name: Build Android APK
         env:
           ORG_GRADLE_PROJECT_org.gradle.daemon: "false"
-        # إيقاف حساسية الخادم تجاه الأنابيب، وضخ الموافقة بشكل مستمر وآمن
+        # تمرير "yes" للإجابة على سؤال تحميل Flutter بدون التسبب في تعليق الأنبوب
         run: |
           set +o pipefail
           yes | flet build apk -vv
