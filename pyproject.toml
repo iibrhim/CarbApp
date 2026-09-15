@@ -13,7 +13,8 @@ product = "حاسبة الكارب الذكية"
 [tool.flet.app]
 module = "main"
 
-[tool.flet.app.android]
+# ✅ القسم الصحيح للأذونات على Android
+[tool.flet.android]
 permissions = [
     "camera",
     "read_external_storage",
