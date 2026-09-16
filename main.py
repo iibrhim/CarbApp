@@ -818,12 +818,13 @@ def _build_ui(page: ft.Page):
         update_filters_ui()
         refresh_rems()
 
+    # ✅ تم الإصلاح: ft.dropdown.Option بدلاً من ft.DropdownOption
     rem_type = ft.Dropdown(
         label="نوع التنبيه",
         options=[
-            ft.DropdownOption(key="med", text="💊 تذكير دواء"),
-            ft.DropdownOption(key="appt", text="📅 موعد طبي"),
-            ft.DropdownOption(key="refill", text="🔄 إعادة صرف"),
+            ft.dropdown.Option(key="med", text="💊 تذكير دواء"),
+            ft.dropdown.Option(key="appt", text="📅 موعد طبي"),
+            ft.dropdown.Option(key="refill", text="🔄 إعادة صرف"),
         ],
         value="med",
         border_radius=15,
@@ -831,12 +832,14 @@ def _build_ui(page: ft.Page):
         border_color="transparent",
         text_style=ft.TextStyle(weight=ft.FontWeight.BOLD),
     )
+
+    # ✅ تم الإصلاح: ft.dropdown.Option بدلاً من ft.DropdownOption
     med_freq = ft.Dropdown(
         label="التكرار",
         options=[
-            ft.DropdownOption(key="مرة يومياً", text="مرة واحدة يومياً"),
-            ft.DropdownOption(key="مرتين يومياً", text="مرتين يومياً"),
-            ft.DropdownOption(key="عند الحاجة", text="عند الحاجة"),
+            ft.dropdown.Option(key="مرة يومياً", text="مرة واحدة يومياً"),
+            ft.dropdown.Option(key="مرتين يومياً", text="مرتين يومياً"),
+            ft.dropdown.Option(key="عند الحاجة", text="عند الحاجة"),
         ],
         value="مرة يومياً",
         border_radius=15,
@@ -845,6 +848,7 @@ def _build_ui(page: ft.Page):
         text_style=ft.TextStyle(weight=ft.FontWeight.BOLD),
         visible=True,
     )
+
     appt_day_before = ft.Checkbox(
         label="تذكير قبل الموعد بيوم",
         value=False,
