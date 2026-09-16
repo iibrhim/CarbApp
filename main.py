@@ -369,6 +369,7 @@ def _build_ui(page: ft.Page):
     def update_images_ui():
         images_row.controls.clear()
         for i, item in enumerate(selected_images):
+            # ✅ استخدام src_base64 مع البيانات المحملة مسبقاً
             img = ft.Image(
                 src_base64=item.get("base64"),
                 width=70,
@@ -376,6 +377,7 @@ def _build_ui(page: ft.Page):
                 fit=ft.BoxFit.COVER,
                 border_radius=10,
             )
+            # إذا لم تكن base64 متاحة، جرّب المسار المباشر
             if not item.get("base64"):
                 img.src = item.get("path")
 
