@@ -5,14 +5,13 @@ import asyncio
 import os
 import base64
 import re
-import mimetypes
 import urllib.request
 import urllib.error
 import traceback
 import logging
 
 # ========================================================
-# --- التسجيل ---
+# --- التسجيل وإعدادات البيئة ---
 # ========================================================
 logging.basicConfig(
     level=logging.INFO,
@@ -20,10 +19,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger("carbapp")
 
+# محاولة تحميل المتغيرات البيئية من ملف .env (اختياري لزيادة الأمان مستقبلاً)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # ========================================================
-# ✅ مفتاح Gemini API (صيغة AIza من Cloud Console)
+# ✅ مفتاح Gemini API
 # ========================================================
-GEMINI_API_KEY = "AIzaSyCb1zlR3pFU7JbF0oe_scAxIh608kVHTf0"
+# سيقوم التطبيق بالبحث عن المفتاح في المتغيرات البيئية أولاً، 
+# وإذا لم يجده سيستخدم المفتاح المدمج أدناه.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6K3vP0u_NZijJx8eq0oQPuzDJV9VQfoMXQqYtCoyaAIBQ")
 GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_API_URL = (
     "https://generativelanguage.googleapis.com/v1beta/"
@@ -358,22 +366,36 @@ def _build_ui(page: ft.Page):
     )
     final_dose_state = {"dose": 0.0, "bg": 0.0}
 
+    def _read_image_base64(path):
+        """قراءة الصورة وتحويلها إلى base64 لضمان التوافقية."""
+        with open(path, "rb") as img_file:
+            raw = img_file.read()
+        if len(raw) > MAX_IMAGE_BYTES:
+            raise ValueError(f"الصورة كبيرة جداً ({len(raw)} بايت)")
+        return base64.b64encode(raw).decode("utf-8")
+
     def remove_image(idx):
         if 0 <= idx < len(selected_images):
             selected_images.pop(idx)
             update_images_ui()
 
     def update_images_ui():
-        """✅ عرض الصور باستخدام المسار الأصلي مباشرة (content://)."""
+        """✅ عرض الصور باستخدام Base64 لضمان ظهورها بشكل موثوق كصورة مصغرة."""
         images_row.controls.clear()
         for i, item in enumerate(selected_images):
-            img = ft.Image(
-                src=item.get("path"),
-                width=70,
-                height=70,
-                fit=ft.BoxFit.COVER,
-                border_radius=10,
-            )
+            try:
+                b64_data = _read_image_base64(item["path"])
+                img = ft.Image(
+                    src_base64=b64_data,
+                    width=70,
+                    height=70,
+                    fit=ft.BoxFit.COVER,
+                    border_radius=10,
+                )
+            except Exception as ex:
+                logger.warning("فشل تحميل الصورة المصغرة: %s", ex)
+                img = ft.Icon(ft.Icons.BROKEN_IMAGE, size=70, color="grey")
+
             images_row.controls.append(
                 ft.Stack(
                     [
@@ -403,7 +425,6 @@ def _build_ui(page: ft.Page):
         page.update()
 
     def on_file_picked(e: ft.FilePickerResultEvent):
-        """✅ نحتفظ بالمسار الأصلي فقط."""
         logger.info("on_file_picked: %s", e.files)
         if e.files:
             selected_images.clear()
@@ -454,16 +475,7 @@ def _build_ui(page: ft.Page):
         ),
     )
 
-    def _read_image_base64(path):
-        """قراءة الصورة وتحويلها إلى base64."""
-        with open(path, "rb") as img_file:
-            raw = img_file.read()
-        if len(raw) > MAX_IMAGE_BYTES:
-            raise ValueError(f"الصورة كبيرة ({len(raw)} بايت)")
-        return base64.b64encode(raw).decode("utf-8")
-
     def _call_gemini(parts):
-        """✅ استخدام ?key= في الرابط (الطريقة الصحيحة لمفاتيح AIza)."""
         payload = {"contents": [{"parts": parts}]}
         url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
         req = urllib.request.Request(
@@ -475,9 +487,10 @@ def _build_ui(page: ft.Page):
             return response.read().decode("utf-8")
 
     async def analyze_meal(e):
-        if not GEMINI_API_KEY or not GEMINI_API_KEY.startswith("AIza"):
+        # ✅ التحسين: التحقق من وجود المفتاح فقط بدون تقييده بصيغة معينة
+        if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 10:
             page.snack_bar = ft.SnackBar(
-                ft.Text("⚠️ مفتاح Gemini API غير صالح (يجب أن يبدأ بـ AIza)."),
+                ft.Text("⚠️ مفتاح Gemini API غير موجود أو غير مكتمل."),
                 bgcolor="red",
             )
             page.snack_bar.open = True
@@ -1733,7 +1746,7 @@ def _build_ui(page: ft.Page):
 
 
 # ========================================================
-# ✅ نقطة الدخول الصحيحة لـ Flet 0.25.2
+# ✅ نقطة الدخول الصحيحة لـ Flet
 # ========================================================
 if __name__ == "__main__":
     ft.app(target=main)
