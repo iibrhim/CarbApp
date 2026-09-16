@@ -24,10 +24,11 @@ jobs:
           cmdline-tools-version: 'latest'
           packages: ''
 
-      - name: Set up Flutter 3.29.0
+      # ✅ تم تغيير إصدار Flutter إلى 3.24.0 للتوافق مع Flet 0.25.2
+      - name: Set up Flutter 3.24.0
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.0'
+          flutter-version: '3.24.0'
           channel: 'stable'
 
       - name: Disable Analytics
@@ -90,6 +91,7 @@ jobs:
           CI: "true"
           FLET_CLI_NO_RICH_OUTPUT: "true"
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.parallel=true"
+        # إزالة --yes غير المدعوم في هذا الإصدار
         run: flet build apk --verbose
 
       - name: Upload APK
