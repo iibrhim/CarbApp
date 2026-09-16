@@ -21,18 +21,12 @@ logging.basicConfig(
 logger = logging.getLogger("carbapp")
 
 # ========================================================
-# ✅ مفتاح Gemini API (صيغة AQ. الجديدة)
-#    يتم إرساله عبر الترويسة x-goog-api-key
+# ✅ إعدادات Gemini API (المفتاح بصيغة AQ. الجديدة)
+#    يتم إرساله عبر ترويسة Authorization: Bearer
 # ========================================================
-API_KEY = "AQ.Ab8RN6JXvDR4UnUiZgnCxt48cfiKZZWu3v-avW1CdHEQoKkMeg"
-
-# ✅ الرابط بدون ?key= لأننا سنستخدم الترويسة
-# ✅ الموديل الأحدث: gemini-2.5-flash
-API_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/"
-    "models/gemini-2.5-flash:generateContent"
-)
-API_TIMEOUT_SEC = 45
+GEMINI_API_KEY = "AQ.Ab8RN6JXvDR4UnUiZgnCxt48cfiKZZWu3v-avW1CdHEQoKkMeg"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+API_TIMEOUT_SEC = 60
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 DEFAULT_MAX_BOLUS = 15.0
 
@@ -72,7 +66,7 @@ def safe_float(val, default=0.0):
         return default
 
 
-def parse_gemini_json(raw_text):
+def parse_ai_json(raw_text):
     raw_text = (raw_text or "").strip()
     raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
     raw_text = re.sub(r"\s*```$", "", raw_text)
@@ -369,18 +363,23 @@ def _build_ui(page: ft.Page):
     def update_images_ui():
         images_row.controls.clear()
         for i, item in enumerate(selected_images):
-            # ✅ استخدام src_base64 مع البيانات المحملة مسبقاً
-            img = ft.Image(
-                src_base64=item.get("base64"),
-                width=70,
-                height=70,
-                fit=ft.BoxFit.COVER,
-                border_radius=10,
-            )
-            # إذا لم تكن base64 متاحة، جرّب المسار المباشر
-            if not item.get("base64"):
-                img.src = item.get("path")
-
+            # ✅ استخدام src_base64 لعرض موثوق على Android
+            try:
+                img = ft.Image(
+                    src_base64=item.get("base64"),
+                    width=70,
+                    height=70,
+                    fit=ft.BoxFit.COVER,
+                    border_radius=10,
+                )
+            except Exception:
+                img = ft.Image(
+                    src=item.get("path"),
+                    width=70,
+                    height=70,
+                    fit=ft.BoxFit.COVER,
+                    border_radius=10,
+                )
             images_row.controls.append(
                 ft.Stack(
                     [
@@ -406,8 +405,8 @@ def _build_ui(page: ft.Page):
                 f"{it['name']} ({it.get('size_kb', 0)}KB)"
                 for it in selected_images
             )
-            images_debug.value = f"✅ محمّلة: {info}"
-            images_debug.color = "green"
+            images_debug.value = f"📷 {len(selected_images)} صورة: {info}"
+            images_debug.color = "blue"
         else:
             images_debug.value = ""
         page.update()
@@ -423,32 +422,28 @@ def _build_ui(page: ft.Page):
                     continue
                 try:
                     raw = None
-                    read_error = None
                     try:
                         with open(path, "rb") as img_file:
                             raw = img_file.read()
                     except Exception as ex1:
-                        read_error = str(ex1)
+                        logger.warning("فشل فتح مباشر: %s", ex1)
                         try:
                             if path.startswith("file://"):
                                 with open(path[7:], "rb") as img_file:
                                     raw = img_file.read()
                         except Exception as ex2:
-                            logger.warning(
-                                "فشل فتح الملف: %s | %s", ex1, ex2
-                            )
+                            logger.warning("فشل فتح بديل: %s", ex2)
 
                     if raw is None or len(raw) == 0:
                         logger.warning("الملف فارغ: %s", path)
                         page.snack_bar = ft.SnackBar(
-                            ft.Text(f"⚠️ تعذر قراءة الصورة: {read_error}"),
+                            ft.Text("⚠️ تعذر قراءة الصورة"),
                             bgcolor="orange",
                         )
                         page.snack_bar.open = True
                         continue
 
                     if len(raw) > MAX_IMAGE_BYTES:
-                        logger.warning("الصورة كبيرة: %d بايت", len(raw))
                         page.snack_bar = ft.SnackBar(
                             ft.Text("⚠️ الصورة كبيرة جداً (الحد 4 ميجا)"),
                             bgcolor="orange",
@@ -470,17 +465,12 @@ def _build_ui(page: ft.Page):
                         }
                     )
                     logger.info(
-                        "تم تحميل: %s (%d KB, %s)",
+                        "تم تحميل: %s (%d KB)",
                         f.name,
                         len(raw) // 1024,
-                        mime,
                     )
                 except Exception as ex:
                     logger.exception("خطأ في قراءة الصورة: %s", ex)
-                    page.snack_bar = ft.SnackBar(
-                        ft.Text(f"❌ خطأ: {str(ex)[:80]}"), bgcolor="red"
-                    )
-                    page.snack_bar.open = True
             update_images_ui()
 
     file_picker = ft.FilePicker()
@@ -492,13 +482,12 @@ def _build_ui(page: ft.Page):
             [
                 ft.Icon(ft.Icons.CAMERA_ALT, size=40, color="teal"),
                 ft.Text(
-                    "اضغط لاختيار صورة من الاستوديو",
+                    "اختر صورة من الاستوديو",
                     weight=ft.FontWeight.BOLD,
                     size=15,
                 ),
                 ft.Text(
-                    "💡 لالتقاط صورة جديدة: افتح تطبيق الكاميرا ثم "
-                    "اختر الصورة من الاستوديو",
+                    "📸 يمكنك إضافة أكثر من صورة للتحليل",
                     size=11,
                     color="grey700",
                     text_align=ft.TextAlign.CENTER,
@@ -541,24 +530,23 @@ def _build_ui(page: ft.Page):
         return parts
 
     def _call_gemini(parts):
-        """✅ إرسال المفتاح عبر الترويسة x-goog-api-key (للصيغة الجديدة AQ.)."""
+        """✅ إرسال المفتاح عبر ترويسة Authorization: Bearer للمفاتيح AQ."""
         payload = {"contents": [{"parts": parts}]}
         req = urllib.request.Request(
-            API_URL,
+            GEMINI_API_URL,
             data=json.dumps(payload).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
-                "x-goog-api-key": API_KEY,
+                "Authorization": f"Bearer {GEMINI_API_KEY}",
             },
         )
         with urllib.request.urlopen(req, timeout=API_TIMEOUT_SEC) as response:
             return response.read().decode("utf-8")
 
     async def analyze_meal(e):
-        # ✅ فحص بسيط للمفتاح (لا يشترط بدء AIza مع الصيغة الجديدة)
-        if not API_KEY or len(API_KEY) < 20:
+        if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 20:
             page.snack_bar = ft.SnackBar(
-                ft.Text("⚠️ مفتاح API غير موجود أو غير صالح."),
+                ft.Text("⚠️ مفتاح Gemini API غير موجود أو غير صالح."),
                 bgcolor="red",
             )
             page.snack_bar.open = True
@@ -585,7 +573,7 @@ def _build_ui(page: ft.Page):
             res_body = await asyncio.to_thread(_call_gemini, parts)
             res_json = json.loads(res_body)
             raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
-            result_data = parse_gemini_json(raw_text)
+            result_data = parse_ai_json(raw_text)
 
             carbs_val = safe_float(result_data.get("net_carbs_grams", 0), 0.0)
             extracted_carbs_input.value = str(carbs_val)
@@ -596,7 +584,7 @@ def _build_ui(page: ft.Page):
                     [
                         ft.Icon(ft.Icons.AUTO_AWESOME, color="teal"),
                         ft.Text(
-                            "تحليل الذكاء الاصطناعي",
+                            "تحليل Gemini",
                             weight=ft.FontWeight.BOLD,
                             size=18,
                             color="black",
@@ -679,13 +667,10 @@ def _build_ui(page: ft.Page):
                 err_body = ex.read().decode("utf-8")[:300]
             except Exception:
                 pass
-            logger.error("Response body: %s", err_body)
+            logger.error("Response: %s", err_body)
 
             if ex.code == 401:
-                msg = (
-                    "❌ مفتاح API غير صالح (401).\n"
-                    "تحقق من المفتاح في aistudio.google.com/apikey"
-                )
+                msg = "❌ مفتاح Gemini غير صالح (401). تحقق من المفتاح."
             elif ex.code == 403:
                 msg = "❌ المفتاح لا يملك صلاحية للوصول (403)"
             elif ex.code == 404:
@@ -898,7 +883,7 @@ def _build_ui(page: ft.Page):
                 images_debug,
                 description_input,
                 ft.ElevatedButton(
-                    "(الخطوة الأولى) تحليل الذكاء الاصطناعي",
+                    "تحليل الوجبة بـ Gemini",
                     icon=ft.Icons.AUTO_AWESOME,
                     on_click=analyze_meal,
                     style=ft.ButtonStyle(
@@ -913,7 +898,7 @@ def _build_ui(page: ft.Page):
                 ft.Divider(color="grey"),
                 extracted_carbs_input,
                 ft.ElevatedButton(
-                    "(الخطوة الثانية) حساب الجرعة",
+                    "حساب الجرعة النهائية",
                     icon=ft.Icons.CALCULATE,
                     on_click=calculate_final_dose,
                     style=ft.ButtonStyle(
