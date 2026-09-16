@@ -22,7 +22,6 @@ logger = logging.getLogger("carbapp")
 
 # ========================================================
 # ⚠️ تحذير: مفتاح API مكشوف داخل الكود.
-#   سيُضمَّن في ملف APK ويمكن استخراجه.
 # ========================================================
 API_KEY = "AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg"
 API_URL = (
@@ -296,14 +295,17 @@ def _build_ui(page: ft.Page):
                 else ft.KeyboardType.NUMBER
             ),
             disabled=disabled,
-            text_style=ft.TextStyle(weight=ft.FontWeight.BOLD),
+            text_style=ft.TextStyle(weight=ft.FontWeight.BOLD, color="black"),
+            label_style=ft.TextStyle(color="grey700"),
             hint_text=helper_text,
         )
 
     # ====================================================
     # --- قسم الحاسبة الذكية ---
     # ====================================================
-    selected_images_paths = []
+    # ✅ قائمة الصور تُخزَّن الآن كـ dicts تحتوي على base64
+    selected_images = []
+
     images_row = ft.Row(
         wrap=True, spacing=10, alignment=ft.MainAxisAlignment.CENTER
     )
@@ -354,26 +356,50 @@ def _build_ui(page: ft.Page):
     final_dose_state = {"dose": 0.0, "bg": 0.0}
 
     def update_images_ui():
+        """✅ يعرض الصور باستخدام base64 بدلاً من المسار."""
         images_row.controls.clear()
-        for path in selected_images_paths:
-            if path:
-                images_row.controls.append(
-                    ft.Image(
-                        src=path,
-                        width=70,
-                        height=70,
-                        fit=ft.BoxFit.COVER,
-                        border_radius=10,
-                    )
+        for item in selected_images:
+            images_row.controls.append(
+                ft.Image(
+                    src_base64=item["base64"],
+                    width=70,
+                    height=70,
+                    fit=ft.BoxFit.COVER,
+                    border_radius=10,
                 )
+            )
         page.update()
 
     def on_file_picked(e: ft.FilePickerResultEvent):
+        """✅ يقرأ الملف فوراً ويحوله إلى base64."""
         if e.files:
-            selected_images_paths.clear()
+            selected_images.clear()
             for f in e.files:
-                if f.path:
-                    selected_images_paths.append(f.path)
+                if not f.path:
+                    continue
+                try:
+                    with open(f.path, "rb") as img_file:
+                        raw = img_file.read()
+                    if len(raw) > MAX_IMAGE_BYTES:
+                        logger.warning(
+                            "الصورة كبيرة جداً (%d بايت)، تم تخطيها: %s",
+                            len(raw),
+                            f.path,
+                        )
+                        continue
+                    b64 = base64.b64encode(raw).decode("utf-8")
+                    mime, _ = mimetypes.guess_type(f.path)
+                    mime = mime or "image/jpeg"
+                    selected_images.append(
+                        {
+                            "name": f.name or "image",
+                            "base64": b64,
+                            "mime": mime,
+                        }
+                    )
+                    logger.info("تم تحميل الصورة: %s (%s)", f.name, mime)
+                except Exception as ex:
+                    logger.warning("فشل قراءة الصورة %s: %s", f.path, ex)
             update_images_ui()
 
     file_picker = ft.FilePicker()
@@ -385,14 +411,20 @@ def _build_ui(page: ft.Page):
             [
                 ft.Icon(ft.Icons.CAMERA_ALT, size=40, color="teal"),
                 ft.Text(
-                    "اضغط لفتح الكاميرا أو الاستوديو",
+                    "اضغط لاختيار صورة من الاستوديو",
                     weight=ft.FontWeight.BOLD,
                     size=15,
                 ),
-                ft.Text("يمكنك دمج أكثر من صورة للتحليل", size=11),
+                ft.Text(
+                    "💡 لالتقاط صورة جديدة: افتح تطبيق الكاميرا ثم "
+                    "اختر الصورة من الاستوديو",
+                    size=11,
+                    color="grey700",
+                    text_align=ft.TextAlign.CENTER,
+                ),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=2,
+            spacing=4,
         ),
         padding=ft.padding.all(20),
         border=ft.border.all(width=2, color="teal"),
@@ -405,6 +437,7 @@ def _build_ui(page: ft.Page):
     )
 
     def _build_gemini_parts():
+        """✅ يستخدم base64 المحفوظ مسبقاً."""
         prompt_text = (
             "أنت خبير تغذية سريرية لمرضى السكري. حلل الصور المرفقة إن "
             "وجدت، أو الوصف التالي: '"
@@ -415,25 +448,16 @@ def _build_ui(page: ft.Page):
             '"items": [{"name": "المكون", "weight_g": 0, "carbs_g": 0}]}'
         )
         parts = [{"text": prompt_text}]
-        for path in selected_images_paths:
-            if not path or not os.path.exists(path):
-                continue
-            size = os.path.getsize(path)
-            if size > MAX_IMAGE_BYTES:
-                logger.warning("تخطي صورة كبيرة (%d bytes): %s", size, path)
-                continue
-            try:
-                with open(path, "rb") as image_file:
-                    img_data = base64.b64encode(image_file.read()).decode(
-                        "utf-8"
-                    )
-                mime, _ = mimetypes.guess_type(path)
-                mime = mime or "image/jpeg"
+        for item in selected_images:
+            if item.get("base64"):
                 parts.append(
-                    {"inline_data": {"mime_type": mime, "data": img_data}}
+                    {
+                        "inline_data": {
+                            "mime_type": item["mime"],
+                            "data": item["base64"],
+                        }
+                    }
                 )
-            except Exception as ex:
-                logger.warning("فشل قراءة الصورة %s: %s", path, ex)
         return parts
 
     def _call_gemini(parts):
@@ -447,7 +471,7 @@ def _build_ui(page: ft.Page):
             return response.read().decode("utf-8")
 
     async def analyze_meal(e):
-        if not selected_images_paths and not description_input.value:
+        if not selected_images and not description_input.value:
             page.snack_bar = ft.SnackBar(
                 ft.Text("الرجاء إرفاق صورة للوجبة أو كتابة وصفها!"),
                 bgcolor="red",
@@ -463,6 +487,7 @@ def _build_ui(page: ft.Page):
 
         try:
             parts = _build_gemini_parts()
+            logger.info("إرسال %d جزء للتحليل", len(parts))
             res_body = await asyncio.to_thread(_call_gemini, parts)
             res_json = json.loads(res_body)
             raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
@@ -480,6 +505,7 @@ def _build_ui(page: ft.Page):
                             "تحليل الذكاء الاصطناعي",
                             weight=ft.FontWeight.BOLD,
                             size=18,
+                            color="black",
                         ),
                     ]
                 )
@@ -488,6 +514,7 @@ def _build_ui(page: ft.Page):
                 ft.Text(
                     result_data.get("meal_description", "تم التحليل بنجاح."),
                     size=14,
+                    color="black",
                 )
             )
 
@@ -500,11 +527,16 @@ def _build_ui(page: ft.Page):
                         ft.Container(
                             content=ft.Row(
                                 [
-                                    ft.Icon(ft.Icons.RESTAURANT, size=12),
+                                    ft.Icon(
+                                        ft.Icons.RESTAURANT,
+                                        size=12,
+                                        color="black",
+                                    ),
                                     ft.Text(
                                         f"{name} ({weight_g}ج)",
                                         weight=ft.FontWeight.BOLD,
                                         size=12,
+                                        color="black",
                                     ),
                                 ],
                                 spacing=4,
@@ -534,6 +566,7 @@ def _build_ui(page: ft.Page):
                                     weight=ft.FontWeight.BOLD,
                                     size=12,
                                     expand=True,
+                                    color="black",
                                 ),
                             ]
                         ),
@@ -566,7 +599,8 @@ def _build_ui(page: ft.Page):
         except Exception as ex:
             logger.exception("analyze_meal failed: %s", ex)
             page.snack_bar = ft.SnackBar(
-                ft.Text("تعذر تحليل الوجبة، حاول مجدداً"), bgcolor="red"
+                ft.Text(f"تعذر تحليل الوجبة: {str(ex)[:80]}"),
+                bgcolor="red",
             )
             page.snack_bar.open = True
         finally:
@@ -676,21 +710,23 @@ def _build_ui(page: ft.Page):
                     [
                         ft.Row(
                             [
-                                ft.Icon(ft.Icons.FASTFOOD, size=18),
+                                ft.Icon(ft.Icons.FASTFOOD, size=18, color="black"),
                                 ft.Text(
                                     f"جرعة الطعام: {round(meal_dose, 1)} وحدة",
                                     weight=ft.FontWeight.BOLD,
                                     size=14,
+                                    color="black",
                                 ),
                             ]
                         ),
                         ft.Row(
                             [
-                                ft.Icon(ft.Icons.HEALING, size=18),
+                                ft.Icon(ft.Icons.HEALING, size=18, color="black"),
                                 ft.Text(
                                     f"تصحيح السكر: {round(correction_dose, 1)} وحدة",
                                     weight=ft.FontWeight.BOLD,
                                     size=14,
+                                    color="black",
                                 ),
                             ]
                         ),
@@ -782,7 +818,9 @@ def _build_ui(page: ft.Page):
     # --- مركز التنبيهات ---
     # ====================================================
     filter_state = {"current": "all"}
-    reminders_list = ft.Column(spacing=15, scroll=ft.ScrollMode.HIDDEN, expand=True)
+    reminders_list = ft.Column(
+        spacing=15, scroll=ft.ScrollMode.HIDDEN, expand=True
+    )
     filters_row = ft.Row(scroll=ft.ScrollMode.HIDDEN, spacing=10)
 
     def update_filters_ui():
@@ -818,41 +856,67 @@ def _build_ui(page: ft.Page):
         update_filters_ui()
         refresh_rems()
 
-    # ✅ تم الإصلاح: ft.dropdown.Option بدلاً من ft.DropdownOption
+    # ✅ استخدام content=ft.Text(color="black") لحل مشكلة النص الأبيض
     rem_type = ft.Dropdown(
         label="نوع التنبيه",
+        label_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
+        text_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
         options=[
-            ft.dropdown.Option(key="med", text="💊 تذكير دواء"),
-            ft.dropdown.Option(key="appt", text="📅 موعد طبي"),
-            ft.dropdown.Option(key="refill", text="🔄 إعادة صرف"),
+            ft.dropdown.Option(
+                key="med",
+                content=ft.Text("💊 تذكير دواء", color="black", size=14),
+            ),
+            ft.dropdown.Option(
+                key="appt",
+                content=ft.Text("📅 موعد طبي", color="black", size=14),
+            ),
+            ft.dropdown.Option(
+                key="refill",
+                content=ft.Text("🔄 إعادة صرف", color="black", size=14),
+            ),
         ],
         value="med",
         border_radius=15,
         filled=True,
-        border_color="transparent",
-        text_style=ft.TextStyle(weight=ft.FontWeight.BOLD),
+        fill_color="white",
+        bgcolor="white",
+        border_color="grey400",
+        text_style=ft.TextStyle(color="black"),
     )
 
-    # ✅ تم الإصلاح: ft.dropdown.Option بدلاً من ft.DropdownOption
     med_freq = ft.Dropdown(
         label="التكرار",
+        label_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
+        text_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
         options=[
-            ft.dropdown.Option(key="مرة يومياً", text="مرة واحدة يومياً"),
-            ft.dropdown.Option(key="مرتين يومياً", text="مرتين يومياً"),
-            ft.dropdown.Option(key="عند الحاجة", text="عند الحاجة"),
+            ft.dropdown.Option(
+                key="مرة يومياً",
+                content=ft.Text("مرة واحدة يومياً", color="black", size=14),
+            ),
+            ft.dropdown.Option(
+                key="مرتين يومياً",
+                content=ft.Text("مرتين يومياً", color="black", size=14),
+            ),
+            ft.dropdown.Option(
+                key="عند الحاجة",
+                content=ft.Text("عند الحاجة", color="black", size=14),
+            ),
         ],
         value="مرة يومياً",
         border_radius=15,
         filled=True,
-        border_color="transparent",
-        text_style=ft.TextStyle(weight=ft.FontWeight.BOLD),
+        fill_color="white",
+        bgcolor="white",
+        border_color="grey400",
         visible=True,
     )
 
     appt_day_before = ft.Checkbox(
         label="تذكير قبل الموعد بيوم",
         value=False,
-        label_style=ft.TextStyle(weight=ft.FontWeight.BOLD),
+        label_style=ft.TextStyle(
+            weight=ft.FontWeight.BOLD, color="black"
+        ),
         visible=False,
     )
 
@@ -943,7 +1007,14 @@ def _build_ui(page: ft.Page):
             rem_time_field_2.value = time_picker_2.value.strftime("%H:%M")
             page.update()
 
-    date_picker_1 = ft.DatePicker(on_change=on_date1_picked)
+    # ✅ إضافة first_date و last_date لحل مشكلة التقويم الفارغ (Jan 2050)
+    _now = datetime.datetime.now()
+    date_picker_1 = ft.DatePicker(
+        on_change=on_date1_picked,
+        first_date=_now - datetime.timedelta(days=365),
+        last_date=_now + datetime.timedelta(days=365 * 10),
+        value=_now,
+    )
     time_picker_1 = ft.TimePicker(on_change=on_time1_picked)
     time_picker_2 = ft.TimePicker(on_change=on_time2_picked)
     page.overlay.extend([date_picker_1, time_picker_1, time_picker_2])
@@ -1034,7 +1105,11 @@ def _build_ui(page: ft.Page):
             spacing=15,
         ),
         actions=[
-            ft.TextButton("إلغاء", on_click=close_add_dialog),
+            ft.TextButton(
+                "إلغاء",
+                on_click=close_add_dialog,
+                style=ft.ButtonStyle(color="black"),
+            ),
             ft.ElevatedButton(
                 "حفظ",
                 icon=ft.Icons.SAVE,
@@ -1071,6 +1146,7 @@ def _build_ui(page: ft.Page):
                                 "لا توجد تنبيهات",
                                 weight=ft.FontWeight.BOLD,
                                 size=18,
+                                color="black",
                             ),
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -1114,11 +1190,12 @@ def _build_ui(page: ft.Page):
                                         color=color,
                                     ),
                                     ft.Container(expand=True),
-                                    ft.Icon(ft.Icons.ACCESS_TIME, size=14),
+                                    ft.Icon(ft.Icons.ACCESS_TIME, size=14, color="black"),
                                     ft.Text(
                                         item["time"].replace(" & ", " | "),
                                         weight=ft.FontWeight.BOLD,
                                         size=12,
+                                        color="black",
                                     ),
                                 ]
                             ),
@@ -1128,6 +1205,7 @@ def _build_ui(page: ft.Page):
                                         item["title"],
                                         weight=ft.FontWeight.BOLD,
                                         size=16,
+                                        color="black",
                                     ),
                                     ft.Container(expand=True),
                                     ft.IconButton(
@@ -1163,6 +1241,7 @@ def _build_ui(page: ft.Page):
                             "مركز التنبيهات",
                             size=24,
                             weight=ft.FontWeight.BOLD,
+                            color="black",
                         ),
                         ft.IconButton(
                             icon=ft.Icons.ADD_ALARM,
@@ -1282,7 +1361,9 @@ def _build_ui(page: ft.Page):
     # ====================================================
     # --- المؤشرات الصحية ---
     # ====================================================
-    dash_content = ft.Column(spacing=15, scroll=ft.ScrollMode.AUTO, expand=True)
+    dash_content = ft.Column(
+        spacing=15, scroll=ft.ScrollMode.AUTO, expand=True
+    )
 
     def delete_history_record(record_time):
         history = load_history()
@@ -1309,6 +1390,7 @@ def _build_ui(page: ft.Page):
                             ft.Text(
                                 "لا توجد بيانات مسجلة",
                                 weight=ft.FontWeight.BOLD,
+                                color="black",
                             ),
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -1372,7 +1454,9 @@ def _build_ui(page: ft.Page):
                 [
                     ft.Icon(ft.Icons.HISTORY, color="teal"),
                     ft.Text(
-                        "السجل الطبي للجرعات:", weight=ft.FontWeight.BOLD
+                        "السجل الطبي للجرعات:",
+                        weight=ft.FontWeight.BOLD,
+                        color="black",
                     ),
                 ]
             )
@@ -1386,9 +1470,12 @@ def _build_ui(page: ft.Page):
                         title=ft.Text(
                             f"الجرعة: {round(r['dose'], 1)} وحدة",
                             weight=ft.FontWeight.BOLD,
+                            color="black",
                         ),
                         subtitle=ft.Text(
-                            f"السكر: {r['bg']} | {r['time']}", size=11
+                            f"السكر: {r['bg']} | {r['time']}",
+                            size=11,
+                            color="grey700",
                         ),
                         trailing=ft.IconButton(
                             icon=ft.Icons.DELETE,
@@ -1412,6 +1499,7 @@ def _build_ui(page: ft.Page):
                     "المؤشرات والتقارير",
                     size=24,
                     weight=ft.FontWeight.BOLD,
+                    color="black",
                 ),
                 dash_content,
             ],
@@ -1486,6 +1574,7 @@ def _build_ui(page: ft.Page):
                             "الإعدادات الطبية",
                             size=24,
                             weight=ft.FontWeight.BOLD,
+                            color="black",
                         ),
                     ]
                 ),
