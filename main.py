@@ -21,12 +21,16 @@ logging.basicConfig(
 logger = logging.getLogger("carbapp")
 
 # ========================================================
-# ⚠️ تحذير: مفتاح API مكشوف داخل الكود.
+# ✅ مفتاح Gemini API (صيغة AQ. الجديدة)
+#    يتم إرساله عبر الترويسة x-goog-api-key
 # ========================================================
-API_KEY = "AQ.Ab8RN6Irz0KbpLAAqr-vacwrVx3yvmDnR724K4Xolq5LR2QImg"
+API_KEY = "AQ.Ab8RN6JXvDR4UnUiZgnCxt48cfiKZZWu3v-avW1CdHEQoKkMeg"
+
+# ✅ الرابط بدون ?key= لأننا سنستخدم الترويسة
+# ✅ الموديل الأحدث: gemini-2.5-flash
 API_URL = (
     "https://generativelanguage.googleapis.com/v1beta/"
-    f"models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    "models/gemini-2.5-flash:generateContent"
 )
 API_TIMEOUT_SEC = 45
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
@@ -310,6 +314,7 @@ def _build_ui(page: ft.Page):
     images_row = ft.Row(
         wrap=True, spacing=10, alignment=ft.MainAxisAlignment.CENTER
     )
+    images_debug = ft.Text("", size=10, color="grey600")
 
     current_bg_input = custom_textfield(
         "مستوى السكر الحالي", ft.Icons.MONITOR_HEART
@@ -356,49 +361,124 @@ def _build_ui(page: ft.Page):
     )
     final_dose_state = {"dose": 0.0, "bg": 0.0}
 
+    def remove_image(idx):
+        if 0 <= idx < len(selected_images):
+            selected_images.pop(idx)
+            update_images_ui()
+
     def update_images_ui():
         images_row.controls.clear()
-        for item in selected_images:
+        for i, item in enumerate(selected_images):
+            img = ft.Image(
+                src_base64=item.get("base64"),
+                width=70,
+                height=70,
+                fit=ft.BoxFit.COVER,
+                border_radius=10,
+            )
+            if not item.get("base64"):
+                img.src = item.get("path")
+
             images_row.controls.append(
-                ft.Image(
-                    src_base64=item["base64"],
+                ft.Stack(
+                    [
+                        img,
+                        ft.Container(
+                            content=ft.Icon(
+                                ft.Icons.CLOSE, size=14, color="white"
+                            ),
+                            bgcolor="red",
+                            border_radius=10,
+                            padding=2,
+                            right=0,
+                            top=0,
+                            on_click=lambda e, idx=i: remove_image(idx),
+                        ),
+                    ],
                     width=70,
                     height=70,
-                    fit=ft.BoxFit.COVER,
-                    border_radius=10,
                 )
             )
+        if selected_images:
+            info = " | ".join(
+                f"{it['name']} ({it.get('size_kb', 0)}KB)"
+                for it in selected_images
+            )
+            images_debug.value = f"✅ محمّلة: {info}"
+            images_debug.color = "green"
+        else:
+            images_debug.value = ""
         page.update()
 
     def on_file_picked(e: ft.FilePickerResultEvent):
+        logger.info("on_file_picked: %s", e.files)
         if e.files:
             selected_images.clear()
             for f in e.files:
-                if not f.path:
+                path = f.path
+                if not path:
+                    logger.warning("ملف بدون مسار: %s", f)
                     continue
                 try:
-                    with open(f.path, "rb") as img_file:
-                        raw = img_file.read()
-                    if len(raw) > MAX_IMAGE_BYTES:
-                        logger.warning(
-                            "الصورة كبيرة جداً (%d بايت)، تم تخطيها: %s",
-                            len(raw),
-                            f.path,
+                    raw = None
+                    read_error = None
+                    try:
+                        with open(path, "rb") as img_file:
+                            raw = img_file.read()
+                    except Exception as ex1:
+                        read_error = str(ex1)
+                        try:
+                            if path.startswith("file://"):
+                                with open(path[7:], "rb") as img_file:
+                                    raw = img_file.read()
+                        except Exception as ex2:
+                            logger.warning(
+                                "فشل فتح الملف: %s | %s", ex1, ex2
+                            )
+
+                    if raw is None or len(raw) == 0:
+                        logger.warning("الملف فارغ: %s", path)
+                        page.snack_bar = ft.SnackBar(
+                            ft.Text(f"⚠️ تعذر قراءة الصورة: {read_error}"),
+                            bgcolor="orange",
                         )
+                        page.snack_bar.open = True
                         continue
+
+                    if len(raw) > MAX_IMAGE_BYTES:
+                        logger.warning("الصورة كبيرة: %d بايت", len(raw))
+                        page.snack_bar = ft.SnackBar(
+                            ft.Text("⚠️ الصورة كبيرة جداً (الحد 4 ميجا)"),
+                            bgcolor="orange",
+                        )
+                        page.snack_bar.open = True
+                        continue
+
                     b64 = base64.b64encode(raw).decode("utf-8")
-                    mime, _ = mimetypes.guess_type(f.path)
+                    mime, _ = mimetypes.guess_type(path)
                     mime = mime or "image/jpeg"
+
                     selected_images.append(
                         {
                             "name": f.name or "image",
+                            "path": path,
                             "base64": b64,
                             "mime": mime,
+                            "size_kb": len(raw) // 1024,
                         }
                     )
-                    logger.info("تم تحميل الصورة: %s (%s)", f.name, mime)
+                    logger.info(
+                        "تم تحميل: %s (%d KB, %s)",
+                        f.name,
+                        len(raw) // 1024,
+                        mime,
+                    )
                 except Exception as ex:
-                    logger.warning("فشل قراءة الصورة %s: %s", f.path, ex)
+                    logger.exception("خطأ في قراءة الصورة: %s", ex)
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text(f"❌ خطأ: {str(ex)[:80]}"), bgcolor="red"
+                    )
+                    page.snack_bar.open = True
             update_images_ui()
 
     file_picker = ft.FilePicker()
@@ -459,16 +539,30 @@ def _build_ui(page: ft.Page):
         return parts
 
     def _call_gemini(parts):
+        """✅ إرسال المفتاح عبر الترويسة x-goog-api-key (للصيغة الجديدة AQ.)."""
         payload = {"contents": [{"parts": parts}]}
         req = urllib.request.Request(
             API_URL,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": API_KEY,
+            },
         )
         with urllib.request.urlopen(req, timeout=API_TIMEOUT_SEC) as response:
             return response.read().decode("utf-8")
 
     async def analyze_meal(e):
+        # ✅ فحص بسيط للمفتاح (لا يشترط بدء AIza مع الصيغة الجديدة)
+        if not API_KEY or len(API_KEY) < 20:
+            page.snack_bar = ft.SnackBar(
+                ft.Text("⚠️ مفتاح API غير موجود أو غير صالح."),
+                bgcolor="red",
+            )
+            page.snack_bar.open = True
+            page.update()
+            return
+
         if not selected_images and not description_input.value:
             page.snack_bar = ft.SnackBar(
                 ft.Text("الرجاء إرفاق صورة للوجبة أو كتابة وصفها!"),
@@ -578,9 +672,27 @@ def _build_ui(page: ft.Page):
 
         except urllib.error.HTTPError as ex:
             logger.error("Gemini HTTP error: %s", ex)
-            page.snack_bar = ft.SnackBar(
-                ft.Text(f"خطأ من الخدمة ({ex.code})"), bgcolor="red"
-            )
+            err_body = ""
+            try:
+                err_body = ex.read().decode("utf-8")[:300]
+            except Exception:
+                pass
+            logger.error("Response body: %s", err_body)
+
+            if ex.code == 401:
+                msg = (
+                    "❌ مفتاح API غير صالح (401).\n"
+                    "تحقق من المفتاح في aistudio.google.com/apikey"
+                )
+            elif ex.code == 403:
+                msg = "❌ المفتاح لا يملك صلاحية للوصول (403)"
+            elif ex.code == 404:
+                msg = f"❌ الموديل غير متوفر ({ex.code})"
+            elif ex.code == 429:
+                msg = "⚠️ تجاوزت الحصة المسموحة. حاول لاحقاً"
+            else:
+                msg = f"خطأ من الخدمة ({ex.code})"
+            page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor="red")
             page.snack_bar.open = True
         except urllib.error.URLError as ex:
             logger.error("Gemini URL error: %s", ex)
@@ -781,6 +893,7 @@ def _build_ui(page: ft.Page):
                 current_bg_input,
                 upload_zone,
                 images_row,
+                images_debug,
                 description_input,
                 ft.ElevatedButton(
                     "(الخطوة الأولى) تحليل الذكاء الاصطناعي",
@@ -858,7 +971,6 @@ def _build_ui(page: ft.Page):
         update_filters_ui()
         refresh_rems()
 
-    # ✅ تم إصلاح الخطأ: إزالة text_style المكرر
     rem_type = ft.Dropdown(
         label="نوع التنبيه",
         label_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
@@ -884,7 +996,6 @@ def _build_ui(page: ft.Page):
         border_color="grey400",
     )
 
-    # ✅ تم إصلاح الخطأ: إزالة text_style المكرر
     med_freq = ft.Dropdown(
         label="التكرار",
         label_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
