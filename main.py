@@ -295,7 +295,9 @@ def _build_ui(page: ft.Page):
                 else ft.KeyboardType.NUMBER
             ),
             disabled=disabled,
-            text_style=ft.TextStyle(weight=ft.FontWeight.BOLD, color="black"),
+            text_style=ft.TextStyle(
+                weight=ft.FontWeight.BOLD, color="black"
+            ),
             label_style=ft.TextStyle(color="grey700"),
             hint_text=helper_text,
         )
@@ -303,7 +305,6 @@ def _build_ui(page: ft.Page):
     # ====================================================
     # --- قسم الحاسبة الذكية ---
     # ====================================================
-    # ✅ قائمة الصور تُخزَّن الآن كـ dicts تحتوي على base64
     selected_images = []
 
     images_row = ft.Row(
@@ -356,7 +357,6 @@ def _build_ui(page: ft.Page):
     final_dose_state = {"dose": 0.0, "bg": 0.0}
 
     def update_images_ui():
-        """✅ يعرض الصور باستخدام base64 بدلاً من المسار."""
         images_row.controls.clear()
         for item in selected_images:
             images_row.controls.append(
@@ -371,7 +371,6 @@ def _build_ui(page: ft.Page):
         page.update()
 
     def on_file_picked(e: ft.FilePickerResultEvent):
-        """✅ يقرأ الملف فوراً ويحوله إلى base64."""
         if e.files:
             selected_images.clear()
             for f in e.files:
@@ -437,7 +436,6 @@ def _build_ui(page: ft.Page):
     )
 
     def _build_gemini_parts():
-        """✅ يستخدم base64 المحفوظ مسبقاً."""
         prompt_text = (
             "أنت خبير تغذية سريرية لمرضى السكري. حلل الصور المرفقة إن "
             "وجدت، أو الوصف التالي: '"
@@ -710,7 +708,9 @@ def _build_ui(page: ft.Page):
                     [
                         ft.Row(
                             [
-                                ft.Icon(ft.Icons.FASTFOOD, size=18, color="black"),
+                                ft.Icon(
+                                    ft.Icons.FASTFOOD, size=18, color="black"
+                                ),
                                 ft.Text(
                                     f"جرعة الطعام: {round(meal_dose, 1)} وحدة",
                                     weight=ft.FontWeight.BOLD,
@@ -721,7 +721,9 @@ def _build_ui(page: ft.Page):
                         ),
                         ft.Row(
                             [
-                                ft.Icon(ft.Icons.HEALING, size=18, color="black"),
+                                ft.Icon(
+                                    ft.Icons.HEALING, size=18, color="black"
+                                ),
                                 ft.Text(
                                     f"تصحيح السكر: {round(correction_dose, 1)} وحدة",
                                     weight=ft.FontWeight.BOLD,
@@ -856,11 +858,10 @@ def _build_ui(page: ft.Page):
         update_filters_ui()
         refresh_rems()
 
-    # ✅ استخدام content=ft.Text(color="black") لحل مشكلة النص الأبيض
+    # ✅ تم إصلاح الخطأ: إزالة text_style المكرر
     rem_type = ft.Dropdown(
         label="نوع التنبيه",
         label_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
-        text_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
         options=[
             ft.dropdown.Option(
                 key="med",
@@ -881,13 +882,12 @@ def _build_ui(page: ft.Page):
         fill_color="white",
         bgcolor="white",
         border_color="grey400",
-        text_style=ft.TextStyle(color="black"),
     )
 
+    # ✅ تم إصلاح الخطأ: إزالة text_style المكرر
     med_freq = ft.Dropdown(
         label="التكرار",
         label_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
-        text_style=ft.TextStyle(color="black", weight=ft.FontWeight.BOLD),
         options=[
             ft.dropdown.Option(
                 key="مرة يومياً",
@@ -1007,7 +1007,6 @@ def _build_ui(page: ft.Page):
             rem_time_field_2.value = time_picker_2.value.strftime("%H:%M")
             page.update()
 
-    # ✅ إضافة first_date و last_date لحل مشكلة التقويم الفارغ (Jan 2050)
     _now = datetime.datetime.now()
     date_picker_1 = ft.DatePicker(
         on_change=on_date1_picked,
@@ -1190,7 +1189,11 @@ def _build_ui(page: ft.Page):
                                         color=color,
                                     ),
                                     ft.Container(expand=True),
-                                    ft.Icon(ft.Icons.ACCESS_TIME, size=14, color="black"),
+                                    ft.Icon(
+                                        ft.Icons.ACCESS_TIME,
+                                        size=14,
+                                        color="black",
+                                    ),
                                     ft.Text(
                                         item["time"].replace(" & ", " | "),
                                         weight=ft.FontWeight.BOLD,
