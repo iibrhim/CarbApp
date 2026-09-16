@@ -21,8 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger("carbapp")
 
 # ========================================================
-# ✅ مفتاح Gemini API الجديد (من Google Cloud Console)
-#    صيغة AIza... تعمل مع ?key= مباشرة
+# ✅ مفتاح Gemini API (صيغة AIza من Cloud Console)
 # ========================================================
 GEMINI_API_KEY = "AIzaSyCb1zlR3pFU7JbF0oe_scAxIh608kVHTf0"
 GEMINI_MODEL = "gemini-2.0-flash"
@@ -369,7 +368,7 @@ def _build_ui(page: ft.Page):
         images_row.controls.clear()
         for i, item in enumerate(selected_images):
             img = ft.Image(
-                src=item.get("path"),  # ✅ الطريقة الصحيحة على Android
+                src=item.get("path"),
                 width=70,
                 height=70,
                 fit=ft.BoxFit.COVER,
@@ -412,12 +411,11 @@ def _build_ui(page: ft.Page):
                 if not f.path:
                     logger.warning("ملف بدون مسار: %s", f)
                     continue
-                mime, _ = mimetypes.guess_type(f.name or "")
                 selected_images.append(
                     {
                         "name": f.name or "image",
-                        "path": f.path,  # content:// URI على Android
-                        "mime": mime or "image/jpeg",
+                        "path": f.path,
+                        "mime": "image/jpeg",
                     }
                 )
                 logger.info("تم تحميل: %s", f.name)
@@ -465,7 +463,7 @@ def _build_ui(page: ft.Page):
         return base64.b64encode(raw).decode("utf-8")
 
     def _call_gemini(parts):
-        """✅ استخدام ?key= في الرابط (يدعم مفاتيح AIza)."""
+        """✅ استخدام ?key= في الرابط (الطريقة الصحيحة لمفاتيح AIza)."""
         payload = {"contents": [{"parts": parts}]}
         url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
         req = urllib.request.Request(
@@ -512,7 +510,6 @@ def _build_ui(page: ft.Page):
             )
             parts = [{"text": prompt_text}]
 
-            # ✅ إضافة الصور (قراءة الملف عند الإرسال فقط)
             for item in selected_images:
                 try:
                     b64 = _read_image_base64(item["path"])
